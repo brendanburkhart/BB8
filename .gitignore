@@ -1,0 +1,12 @@
+# Meson Wrap subprojects
+/subprojects/*
+!/subprojects/*.wrap
+!/subprojects/packagefiles/
+
+# build directories
+build/
+release/
+
+# IDE config
+.vscode/
+.vs/
