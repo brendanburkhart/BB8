@@ -9,6 +9,9 @@ project(
     ]
 )
 
+cpp = meson.get_compiler('cpp')
+add_project_arguments(cpp.get_supported_arguments(['-Wno-cast-function-type']), language: 'cpp')
+
 # Meson will find correct threading library (i.e. pthreads or W32)
 thread_dep = dependency('threads')
 

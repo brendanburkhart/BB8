@@ -3,10 +3,6 @@
 !/subprojects/*.wrap
 !/subprojects/packagefiles/
 
-# build directories
-build/
-release/
-
 # IDE config
 .vscode/
 .vs/
