@@ -1,5 +1,5 @@
-#ifndef FRAME_SYNC_HPP
-#define FRAME_SYNC_HPP
+#ifndef BB8_VISUALIZATION_FRAME_SYNC_HPP
+#define BB8_VISUALIZATION_FRAME_SYNC_HPP
 
 #include <limits>
 #include <vulkan/vulkan_raii.hpp>
@@ -36,4 +36,4 @@ private:
 
 }  // namespace visualization
 
-#endif  // !FRAME_SYNC_HPP
+#endif  // !BB8_VISUALIZATION_FRAME_SYNC_HPP

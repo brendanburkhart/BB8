@@ -1,5 +1,5 @@
-#ifndef SWAP_CHAIN_HPP
-#define SWAP_CHAIN_HPP
+#ifndef BB8_VISUALIZATION_SWAP_CHAIN_HPP
+#define BB8_VISUALIZATION_SWAP_CHAIN_HPP
 
 #include <limits>
 #include <tuple>
@@ -50,4 +50,4 @@ private:
 
 }  // namespace visualization
 
-#endif  // !SWAP_CHAIN_HPP
+#endif  // !BB8_VISUALIZATION_SWAP_CHAIN_HPP

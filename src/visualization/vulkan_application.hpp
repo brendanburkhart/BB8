@@ -1,5 +1,5 @@
-#ifndef VULKAN_APPLICATION_HPP
-#define VULKAN_APPLICATION_HPP
+#ifndef BB8_VISUALIZATION_VULKAN_APPLICATION_HPP
+#define BB8_VISUALIZATION_VULKAN_APPLICATION_HPP
 
 #include <optional>
 #include <string>
@@ -88,4 +88,4 @@ private:
 
 }  // namespace visualization
 
-#endif  // !VULKAN_APPLICATION_HPP
+#endif  // !BB8_VISUALIZATION_VULKAN_APPLICATION_HPP

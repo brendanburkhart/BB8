@@ -1,5 +1,5 @@
-#ifndef WINDOW_HPP
-#define WINDOW_HPP
+#ifndef BB8_VISUALIZATION_WINDOW_HPP
+#define BB8_VISUALIZATION_WINDOW_HPP
 
 #include <cstdint>
 #include <string>
@@ -33,4 +33,4 @@ private:
 
 }  // namespace visualization
 
-#endif  // !WINDOW_HPP
+#endif  // !BB8_VISUALIZATION_WINDOW_HPP
