@@ -5,6 +5,10 @@ shaders = files([
     'shader.frag',
 ])
 
+shaders_src = files([
+    'vertex.cpp',
+])
+
 # Compile GLSL shaders to SPIR-V binaries
 vert_shader = custom_target(
     'vert_shader',

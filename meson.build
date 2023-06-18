@@ -3,7 +3,7 @@ project(
     'cpp',
     version : '0.0.1',
     default_options: [
-        'cpp_std=c++17',
+        'cpp_std=c++20',
         'werror=true',
         'warning_level=3',
     ]
@@ -19,7 +19,7 @@ cpp_compiler = meson.get_compiler('cpp')
 dl_dep = cpp_compiler.find_library('dl', required: false)
 
 vulkan_dep = dependency('vulkan')
-eigen_dep = dependency('eigen3')
+glm_dep = dependency('glm')
 glfw_dep = dependency('glfw3')
 
 subdir('src')

@@ -5,9 +5,11 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 
 #include "shaders.hpp"
+#include "shaders/vertex.hpp"
 
 namespace visualization {
 
@@ -27,6 +29,9 @@ VulkanApplication::VulkanApplication(std::string name, Window* window)
       render_pass(nullptr),
       pipeline(nullptr),
       command_pool(createCommandPool(device, queue_family_indices.graphics_family.value())),
+      transient_pool(createTransientPool(device, queue_family_indices.graphics_family.value())),
+      vertex_buffer(buildVertexBuffer()),
+      index_buffer(buildIndexBuffer()),
       frame_sync({FrameSync(device, *command_pool), FrameSync(device, *command_pool)}),
       swap_chain(*physical_device, device, *surface, window->size()) {
     render_pass = buildRenderPass(device, swap_chain.getFormat());
@@ -116,6 +121,11 @@ vk::raii::CommandPool VulkanApplication::createCommandPool(const vk::raii::Devic
     return vk::raii::CommandPool(device, create_info);
 }
 
+vk::raii::CommandPool VulkanApplication::createTransientPool(const vk::raii::Device& device, uint32_t queue_family_index) {
+    auto create_info = vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlagBits::eTransient, queue_family_index);
+    return vk::raii::CommandPool(device, create_info);
+}
+
 vk::raii::CommandBuffer VulkanApplication::createCommandBuffer(const vk::raii::Device& device, const vk::raii::CommandPool& command_pool) {
     auto allocate_info = vk::CommandBufferAllocateInfo(*command_pool, vk::CommandBufferLevel::ePrimary, 1);
     return std::move(vk::raii::CommandBuffers(device, allocate_info).front());
@@ -188,6 +198,36 @@ vk::raii::RenderPass VulkanApplication::buildRenderPass(const vk::raii::Device& 
     return vk::raii::RenderPass(device, render_pass_create_info, nullptr);
 }
 
+Buffer VulkanApplication::buildVertexBuffer() {
+    size_t size = vertex_data.size() * sizeof(vertex_data[0]);
+    Buffer staging = Buffer(*physical_device, device, Buffer::Requirements::staging(size));
+    Buffer vertex_buffer = Buffer(*physical_device, device, Buffer::Requirements::vertex(size));
+
+    staging.fill((void*)vertex_data.data(), size);
+
+    auto allocate_info = vk::CommandBufferAllocateInfo(*transient_pool, vk::CommandBufferLevel::ePrimary, 1);
+    auto command_buffers = vk::raii::CommandBuffers(device, allocate_info);
+
+    Buffer::copy(staging, vertex_buffer, *command_buffers.front(), *graphics_queue);
+
+    return vertex_buffer;
+}
+
+Buffer VulkanApplication::buildIndexBuffer() {
+    size_t size = vertex_indices.size() * sizeof(vertex_indices[0]);
+    Buffer staging = Buffer(*physical_device, device, Buffer::Requirements::staging(size));
+    Buffer index_buffer = Buffer(*physical_device, device, Buffer::Requirements::index(size));
+
+    staging.fill((void*)vertex_indices.data(), size);
+
+    auto allocate_info = vk::CommandBufferAllocateInfo(*transient_pool, vk::CommandBufferLevel::ePrimary, 1);
+    auto command_buffers = vk::raii::CommandBuffers(device, allocate_info);
+
+    Buffer::copy(staging, index_buffer, *command_buffers.front(), *graphics_queue);
+
+    return index_buffer;
+}
+
 void VulkanApplication::buildGraphicsPipeline() {
     auto vert_shader_create_info = vk::ShaderModuleCreateInfo({}, shaders::vert_shader, nullptr);
     auto vert_shader_module = vk::raii::ShaderModule(device, vert_shader_create_info);
@@ -199,7 +239,9 @@ void VulkanApplication::buildGraphicsPipeline() {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, *vert_shader_module, "main"),
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eFragment, *frag_shader_module, "main")};
 
-    auto vertex_input = vk::PipelineVertexInputStateCreateInfo({}, {}, {}, nullptr);
+    auto binding_descriptions = shaders::Vertex::getBindingDescription();
+    auto attribute_descriptions = shaders::Vertex::getAttributeDescriptions();
+    auto vertex_input = vk::PipelineVertexInputStateCreateInfo(vk::PipelineVertexInputStateCreateFlags(), binding_descriptions, attribute_descriptions, nullptr);
 
     auto input_assembly = vk::PipelineInputAssemblyStateCreateInfo({}, vk::PrimitiveTopology::eTriangleList, false, nullptr);
 
@@ -273,12 +315,14 @@ void VulkanApplication::recordCommandBuffer(vk::CommandBuffer command_buffer, co
     command_buffer.beginRenderPass(render_pass_info, vk::SubpassContents::eInline);
 
     command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline);
+    command_buffer.bindVertexBuffers(0, vertex_buffer.get(), vk::DeviceSize(0));
+    command_buffer.bindIndexBuffer(index_buffer.get(), vk::DeviceSize(0), vk::IndexType::eUint16);
 
     auto viewport = vk::Viewport(0.0, 0.0, swap_chain.getExtent().width, swap_chain.getExtent().height, 0.0, 1.0);
     command_buffer.setViewport(0, viewport);
     command_buffer.setScissor(0, render_area);
 
-    command_buffer.draw(3, 1, 0, 0);
+    command_buffer.drawIndexed(static_cast<uint32_t>(vertex_indices.size()), 1, 0, 0, 0);
 
     command_buffer.endRenderPass();
     command_buffer.end();

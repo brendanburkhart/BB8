@@ -6,7 +6,9 @@
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
+#include "buffer.hpp"
 #include "frame_sync.hpp"
+#include "shaders/vertex.hpp"
 #include "swap_chain.hpp"
 #include "window.hpp"
 
@@ -28,9 +30,6 @@ private:
         std::optional<uint32_t> present_family;
     };
 
-    class SwapChainSupportDetails {
-    };
-
     static std::vector<const char*> gatherLayers(const std::vector<vk::LayerProperties> available_layers, const std::vector<std::string>& required_layers);
     static std::vector<const char*> gatherExtensions(const std::vector<vk::ExtensionProperties> available_extensions, const std::vector<std::string>& required_extensions);
 
@@ -39,11 +38,16 @@ private:
     static vk::raii::PhysicalDevice selectPhysicalDevice(const vk::raii::Instance& instance);
 
     static vk::raii::CommandPool createCommandPool(const vk::raii::Device& device, uint32_t queue_family_index);
+    static vk::raii::CommandPool createTransientPool(const vk::raii::Device& device, uint32_t queue_family_index);
+
     static vk::raii::CommandBuffer createCommandBuffer(const vk::raii::Device& device, const vk::raii::CommandPool& command_pool);
 
     static vk::raii::Instance buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version);
     static vk::raii::Device buildLogicalDevice(const QueueFamilyIndices& queue_family_indices, const vk::raii::PhysicalDevice& physical_device);
     static vk::raii::RenderPass buildRenderPass(const vk::raii::Device& device, vk::Format color_format);
+
+    Buffer buildVertexBuffer();
+    Buffer buildIndexBuffer();
 
     void buildSwapChain();
     void buildGraphicsPipeline();
@@ -82,6 +86,16 @@ private:
     vk::raii::Pipeline pipeline;
 
     vk::raii::CommandPool command_pool;
+    vk::raii::CommandPool transient_pool;
+
+    const std::array<shaders::Vertex, 4> vertex_data = {
+        shaders::Vertex({-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}),
+        shaders::Vertex({0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}),
+        shaders::Vertex({0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}),
+        shaders::Vertex({-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f})};
+    const std::vector<uint16_t> vertex_indices = {0, 1, 2, 2, 3, 0};
+    Buffer vertex_buffer;
+    Buffer index_buffer;
 
     static constexpr size_t max_frames_in_flight = 2;
     std::array<FrameSync, max_frames_in_flight> frame_sync;
