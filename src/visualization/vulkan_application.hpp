@@ -4,9 +4,10 @@
 #include <optional>
 #include <string>
 #include <vector>
-
 #include <vulkan/vulkan_raii.hpp>
 
+#include "frame_sync.hpp"
+#include "swap_chain.hpp"
 #include "window.hpp"
 
 namespace visualization {
@@ -25,20 +26,12 @@ private:
     };
 
     class SwapChainSupportDetails {
-    public:
-        vk::SurfaceCapabilitiesKHR capabilities;
-        std::vector<vk::SurfaceFormatKHR> formats;
-        std::vector<vk::PresentModeKHR> present_modes;
     };
 
     static std::vector<const char*> gatherLayers(const std::vector<vk::LayerProperties> available_layers, const std::vector<std::string>& required_layers);
     static std::vector<const char*> gatherExtensions(const std::vector<vk::ExtensionProperties> available_extensions, const std::vector<std::string>& required_extensions);
 
     static QueueFamilyIndices findQueueFamilies(const vk::raii::PhysicalDevice& device, const vk::raii::SurfaceKHR& surface);
-
-    static SwapChainSupportDetails querySwapChainSupport(const vk::raii::PhysicalDevice& device, const vk::raii::SurfaceKHR& surface);
-    static vk::SurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& available_formats);
-    static vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities, const Window* window);
 
     static vk::raii::PhysicalDevice selectPhysicalDevice(const vk::raii::Instance& instance);
 
@@ -48,20 +41,12 @@ private:
     static vk::raii::Instance buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version);
     static vk::raii::Device buildLogicalDevice(const QueueFamilyIndices& queue_family_indices, const vk::raii::PhysicalDevice& physical_device);
 
-    void buildSwapChain(SwapChainSupportDetails support);
     void buildRenderPass();
     void buildGraphicsPipeline();
 
-    void recordCommandBuffer(vk::CommandBuffer command_buffer, uint32_t image_index);
+    void recordCommandBuffer(vk::CommandBuffer command_buffer, const vk::Framebuffer& framebuffer);
 
     void drawFrame();
-
-    // bool checkDeviceExtensionSupport(VkPhysicalDevice device);
-    // SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
-    // bool isDeviceSuitable(VkPhysicalDevice device);
-    // void selectPhysicalDevice();
-    // void createLogicalDevice();
-    // void initializeVulkan();
 
     static const std::vector<std::string> validation_layers;
     static const std::vector<std::string> device_extensions;
@@ -88,23 +73,17 @@ private:
     vk::raii::Queue graphics_queue;
     vk::raii::Queue present_queue;
 
-    vk::raii::SwapchainKHR swap_chain;
-    vk::Extent2D swap_chain_extent;
-    vk::Format swap_chain_format;
-    std::vector<vk::Image> swap_chain_images;
-    std::vector<vk::raii::Framebuffer> swap_chain_framebuffers;
-    std::vector<vk::raii::ImageView> swap_chain_image_views;
+    SwapChain swap_chain;
 
     vk::raii::PipelineLayout pipeline_layout;
     vk::raii::RenderPass render_pass;
     vk::raii::Pipeline pipeline;
 
     vk::raii::CommandPool command_pool;
-    vk::raii::CommandBuffer command_buffer;
 
-    vk::raii::Semaphore image_available_semaphore;
-    vk::raii::Semaphore render_finished_semaphore;
-    vk::raii::Fence frame_in_flight_fence;
+    static constexpr size_t max_frames_in_flight = 2;
+    std::array<FrameSync, max_frames_in_flight> frame_sync;
+    size_t frame_index = 0;
 };
 
 }  // namespace visualization

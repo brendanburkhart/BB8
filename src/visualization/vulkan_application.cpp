@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
-#include <iostream>
 #include <limits>
 #include <stdexcept>
 
@@ -23,17 +22,12 @@ VulkanApplication::VulkanApplication(std::string name, Window* window)
       device(buildLogicalDevice(queue_family_indices, physical_device)),
       graphics_queue(device.getQueue(queue_family_indices.graphics_family.value(), 0)),
       present_queue(device.getQueue(queue_family_indices.present_family.value(), 0)),
-      swap_chain(nullptr),
+      swap_chain(device, *surface, SwapChain::Support::query(*physical_device, *surface), window->size()),
       pipeline_layout(nullptr),
       render_pass(nullptr),
       pipeline(nullptr),
       command_pool(createCommandPool(device, queue_family_indices.graphics_family.value())),
-      command_buffer(createCommandBuffer(device, command_pool)),
-      image_available_semaphore(device, vk::SemaphoreCreateInfo()),
-      render_finished_semaphore(device, vk::SemaphoreCreateInfo()),
-      frame_in_flight_fence(device, vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)) {
-    auto support = querySwapChainSupport(physical_device, surface);
-    buildSwapChain(support);
+      frame_sync({FrameSync(device, *command_pool), FrameSync(device, *command_pool)}) {
     buildRenderPass();
     buildGraphicsPipeline();
 }
@@ -105,40 +99,6 @@ VulkanApplication::QueueFamilyIndices VulkanApplication::findQueueFamilies(const
     return indices;
 }
 
-VulkanApplication::SwapChainSupportDetails VulkanApplication::querySwapChainSupport(const vk::raii::PhysicalDevice& device, const vk::raii::SurfaceKHR& surface) {
-    SwapChainSupportDetails support_details;
-
-    support_details.capabilities = device.getSurfaceCapabilitiesKHR(*surface);
-    support_details.formats = device.getSurfaceFormatsKHR(*surface);
-    support_details.present_modes = device.getSurfacePresentModesKHR(*surface);
-
-    return support_details;
-}
-
-vk::SurfaceFormatKHR VulkanApplication::chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& available_formats) {
-    for (const auto& surface_format : available_formats) {
-        if (surface_format.format == vk::Format::eB8G8R8A8Srgb &&
-            surface_format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
-            return surface_format;
-        }
-    }
-
-    return available_formats[0];
-}
-
-vk::Extent2D VulkanApplication::chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities, const Window* window) {
-    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
-        return capabilities.currentExtent;
-    } else {
-        vk::Extent2D extent = window->size();
-
-        extent.width = std::clamp(extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-        extent.height = std::clamp(extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-
-        return extent;
-    }
-}
-
 vk::raii::PhysicalDevice VulkanApplication::selectPhysicalDevice(const vk::raii::Instance& instance) {
     vk::raii::PhysicalDevices devices(instance);
 
@@ -182,49 +142,10 @@ vk::raii::Device VulkanApplication::buildLogicalDevice(const QueueFamilyIndices&
     return vk::raii::Device(physical_device, device_create_info);
 }
 
-void VulkanApplication::buildSwapChain(SwapChainSupportDetails support) {
-    uint32_t image_count = support.capabilities.minImageCount + 1;
-    if (support.capabilities.maxImageCount > 0) {
-        image_count = std::min(image_count, support.capabilities.maxImageCount);
-    }
-
-    auto surface_format = chooseSwapSurfaceFormat(support.formats);
-    swap_chain_extent = chooseSwapExtent(support.capabilities, window);
-    swap_chain_format = surface_format.format;
-
-    constexpr uint32_t image_layers = 1;
-    vk::SwapchainCreateInfoKHR create_into = vk::SwapchainCreateInfoKHR(
-        vk::SwapchainCreateFlagsKHR(),
-        *surface,
-        image_count,
-        surface_format.format,
-        surface_format.colorSpace,
-        swap_chain_extent,
-        image_layers,
-        vk::ImageUsageFlagBits::eColorAttachment,
-        vk::SharingMode::eExclusive,
-        {},
-        support.capabilities.currentTransform,
-        vk::CompositeAlphaFlagBitsKHR::eOpaque,
-        vk::PresentModeKHR::eFifo,
-        true,
-        nullptr);
-
-    swap_chain = vk::raii::SwapchainKHR(device, create_into);
-
-    swap_chain_images = swap_chain.getImages();
-
-    auto image_view_create_info = vk::ImageViewCreateInfo({}, {}, vk::ImageViewType::e2D, swap_chain_format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
-    for (auto image : swap_chain_images) {
-        image_view_create_info.image = image;
-        swap_chain_image_views.emplace_back(device, image_view_create_info);
-    }
-}
-
 void VulkanApplication::buildRenderPass() {
     auto color_attachment = vk::AttachmentDescription(
         {},
-        swap_chain_format,
+        swap_chain.getFormat(),
         vk::SampleCountFlagBits::e1,
         vk::AttachmentLoadOp::eClear,
         vk::AttachmentStoreOp::eStore,
@@ -241,10 +162,7 @@ void VulkanApplication::buildRenderPass() {
     auto render_pass_create_info = vk::RenderPassCreateInfo({}, color_attachment, subpass, subpass_dependency, nullptr);
     render_pass = vk::raii::RenderPass(device, render_pass_create_info, nullptr);
 
-    for (auto& image_view : swap_chain_image_views) {
-        auto framebuffer_create_info = vk::FramebufferCreateInfo({}, *render_pass, *image_view, swap_chain_extent.width, swap_chain_extent.height, 1);
-        swap_chain_framebuffers.emplace_back(device, framebuffer_create_info);
-    }
+    swap_chain.addRenderPass(device, *render_pass);
 }
 
 void VulkanApplication::buildGraphicsPipeline() {
@@ -322,21 +240,20 @@ void VulkanApplication::buildGraphicsPipeline() {
     pipeline = vk::raii::Pipeline(device, nullptr, pipeline_create_info);
 }
 
-void VulkanApplication::recordCommandBuffer(vk::CommandBuffer command_buffer, uint32_t image_index) {
+void VulkanApplication::recordCommandBuffer(vk::CommandBuffer command_buffer, const vk::Framebuffer& framebuffer) {
     auto buffer_begin_info = vk::CommandBufferBeginInfo({}, nullptr);
     command_buffer.begin(buffer_begin_info);
 
     auto clear_color = vk::ClearValue(vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
-    auto render_pass_info = vk::RenderPassBeginInfo(*render_pass, *swap_chain_framebuffers[image_index], vk::Rect2D({0, 0}, swap_chain_extent), clear_color);
+    auto render_area = vk::Rect2D({0, 0}, swap_chain.getExtent());
+    auto render_pass_info = vk::RenderPassBeginInfo(*render_pass, framebuffer, render_area, clear_color);
     command_buffer.beginRenderPass(render_pass_info, vk::SubpassContents::eInline);
 
     command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline);
 
-    auto viewport = vk::Viewport(0.0, 0.0, swap_chain_extent.width, swap_chain_extent.height, 0.0, 1.0);
+    auto viewport = vk::Viewport(0.0, 0.0, swap_chain.getExtent().width, swap_chain.getExtent().height, 0.0, 1.0);
     command_buffer.setViewport(0, viewport);
-
-    auto scissor = vk::Rect2D({0, 0}, swap_chain_extent);
-    command_buffer.setScissor(0, scissor);
+    command_buffer.setScissor(0, render_area);
 
     command_buffer.draw(3, 1, 0, 0);
 
@@ -345,25 +262,21 @@ void VulkanApplication::recordCommandBuffer(vk::CommandBuffer command_buffer, ui
 }
 
 void VulkanApplication::drawFrame() {
-    auto wait_result = device.waitForFences(*frame_in_flight_fence, true, std::numeric_limits<uint64_t>::max());
-    assert(wait_result == vk::Result::eSuccess);
-    device.resetFences(*frame_in_flight_fence);
+    frame_sync[frame_index].waitUntilReady(*device);
 
-    auto [acquire_result, image_index] = swap_chain.acquireNextImage(std::numeric_limits<uint64_t>::max(), *image_available_semaphore);
+    auto [acquire_result, image_index] = frame_sync[frame_index].acquireNextImage(swap_chain);
     assert(acquire_result == vk::Result::eSuccess);
-    assert(image_index < swap_chain_images.size());
+    assert(image_index < swap_chain.length());
 
-    command_buffer.reset();
-    recordCommandBuffer(*command_buffer, image_index);
+    frame_sync[frame_index].getCommandBuffer().reset();
+    recordCommandBuffer(frame_sync[frame_index].getCommandBuffer(), swap_chain.getFramebuffer(image_index));
 
-    auto wait_dst_stage_mask = vk::PipelineStageFlags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
-    auto submit_info = vk::SubmitInfo(*image_available_semaphore, wait_dst_stage_mask, *command_buffer, *render_finished_semaphore);
+    frame_sync[frame_index].submitTo(graphics_queue);
 
-    graphics_queue.submit(submit_info, *frame_in_flight_fence);
-
-    auto present_info = vk::PresentInfoKHR(*render_finished_semaphore, *swap_chain, image_index);
-    auto present_result = present_queue.presentKHR(present_info);
+    auto present_result = frame_sync[frame_index].presentTo(present_queue, swap_chain, image_index);
     assert(present_result == vk::Result::eSuccess);
+
+    frame_index = (frame_index + 1) % max_frames_in_flight;
 }
 
 }  // namespace visualization
