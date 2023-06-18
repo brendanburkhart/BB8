@@ -1,8 +1,12 @@
 #include "visualization.hpp"
 
+#include <functional>
+
 namespace visualization {
 
-Visualization::Visualization(std::string name) : window(name), vulkan(name, &window), minimized(window.is_minimized()) {}
+Visualization::Visualization(std::string name) : window(name), vulkan(name, &window), minimized(window.is_minimized()) {
+    window.setResizeCallback(std::bind(&Visualization::resizeCallback, this));
+}
 
 void Visualization::run() {
     while (true) {

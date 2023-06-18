@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <iostream>
 #include <limits>
 #include <stdexcept>
 
@@ -52,6 +53,7 @@ void VulkanApplication::onResize() {
     }
 
     swap_chain = SwapChain(device, *surface, support, window->size());
+    swap_chain.addRenderPass(device, *render_pass);
 }
 
 std::vector<const char*> VulkanApplication::gatherLayers(const std::vector<vk::LayerProperties> available_layers, const std::vector<std::string>& required_layers) {
@@ -64,7 +66,7 @@ std::vector<const char*> VulkanApplication::gatherLayers(const std::vector<vk::L
 
         if (it == available_layers.end()) {
             std::stringstream error_message;
-            error_message << "missing required layer " << layer;
+            error_message << "missing required layer: " << layer;
             throw std::runtime_error(error_message.str());
         } else {
             layers.push_back(layer.data());
@@ -84,7 +86,7 @@ std::vector<const char*> VulkanApplication::gatherExtensions(const std::vector<v
 
         if (it == available_extensions.end()) {
             std::stringstream error_message;
-            error_message << "missing required extension " << extension;
+            error_message << "missing required extension: " << extension;
             throw std::runtime_error(error_message.str());
         } else {
             extensions.push_back(extension.data());
@@ -134,10 +136,15 @@ vk::raii::Instance VulkanApplication::buildInstance(const vk::raii::Context& con
 
     auto required_layers = enable_validation_layers ? validation_layers : std::vector<std::string>();
     auto enabled_layers = gatherLayers(context.enumerateInstanceLayerProperties(), required_layers);
-    auto enabled_extensions = gatherExtensions(context.enumerateInstanceExtensionProperties(), window->requiredVulkanExtensions());
 
-    vk::InstanceCreateInfo create_info({}, &app_info, enabled_layers, enabled_extensions);
-    return vk::raii::Instance(context, create_info);
+    auto required_extensions = window->requiredVulkanExtensions();
+    required_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    auto enabled_extensions = gatherExtensions(context.enumerateInstanceExtensionProperties(), required_extensions);
+
+    auto create_info = vk::InstanceCreateInfo({}, &app_info, enabled_layers, enabled_extensions);
+    auto instance = vk::raii::Instance(context, create_info);
+
+    return instance;
 }
 
 vk::raii::Device VulkanApplication::buildLogicalDevice(const QueueFamilyIndices& queue_family_indices, const vk::raii::PhysicalDevice& physical_device) {
