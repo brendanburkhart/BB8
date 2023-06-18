@@ -18,9 +18,12 @@ public:
         static Support query(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface);
     };
 
-    SwapChain(const vk::raii::Device& device, const vk::SurfaceKHR& surface, const Support& support, const vk::Extent2D window_size);
+    SwapChain(const vk::PhysicalDevice& physical_device,
+              const vk::raii::Device& device,
+              const vk::SurfaceKHR& surface,
+              const vk::Extent2D window_size);
 
-    void addRenderPass(const vk::raii::Device& device, const vk::RenderPass& render_pass);
+    void initializeFramebuffers(const vk::raii::Device& device, const vk::RenderPass& render_pass);
 
     std::tuple<vk::Result, uint32_t> acquireNextImage(const vk::Semaphore& semaphore);
 
@@ -35,6 +38,7 @@ public:
 private:
     static vk::SurfaceFormatKHR chooseSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& available_formats);
     static vk::Extent2D chooseExtent(const vk::SurfaceCapabilitiesKHR& capabilities, const vk::Extent2D window_size);
+    static uint32_t chooseImageCount(const vk::SurfaceCapabilitiesKHR& capabilities);
 
     static constexpr uint64_t timeout = std::numeric_limits<uint64_t>::max();
 
@@ -44,8 +48,8 @@ private:
     vk::raii::SwapchainKHR swap_chain;
 
     std::vector<vk::Image> images;
-    std::vector<vk::raii::Framebuffer> framebuffers;
     std::vector<vk::raii::ImageView> image_views;
+    std::vector<vk::raii::Framebuffer> framebuffers;
 };
 
 }  // namespace visualization

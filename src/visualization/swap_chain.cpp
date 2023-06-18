@@ -15,12 +15,13 @@ SwapChain::Support SwapChain::Support::query(const vk::PhysicalDevice& device, c
     return support;
 }
 
-SwapChain::SwapChain(const vk::raii::Device& device, const vk::SurfaceKHR& surface, const Support& support, const vk::Extent2D window_size) : swap_chain(nullptr) {
-    uint32_t image_count = support.capabilities.minImageCount + 1;
-    if (support.capabilities.maxImageCount > 0) {
-        image_count = std::min(image_count, support.capabilities.maxImageCount);
-    }
-
+SwapChain::SwapChain(
+    const vk::PhysicalDevice& physical_device,
+    const vk::raii::Device& device,
+    const vk::SurfaceKHR& surface,
+    const vk::Extent2D window_size)
+    : swap_chain(nullptr) {
+    auto support = Support::query(physical_device, surface);
     auto surface_format = chooseSurfaceFormat(support.formats);
     extent = chooseExtent(support.capabilities, window_size);
     format = surface_format.format;
@@ -29,7 +30,7 @@ SwapChain::SwapChain(const vk::raii::Device& device, const vk::SurfaceKHR& surfa
     vk::SwapchainCreateInfoKHR create_into = vk::SwapchainCreateInfoKHR(
         vk::SwapchainCreateFlagsKHR(),
         surface,
-        image_count,
+        chooseImageCount(support.capabilities),
         surface_format.format,
         surface_format.colorSpace,
         extent,
@@ -47,14 +48,13 @@ SwapChain::SwapChain(const vk::raii::Device& device, const vk::SurfaceKHR& surfa
 
     images = swap_chain.getImages();
 
-    auto image_view_create_info = vk::ImageViewCreateInfo({}, {}, vk::ImageViewType::e2D, format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
     for (auto image : images) {
-        image_view_create_info.image = image;
+        auto image_view_create_info = vk::ImageViewCreateInfo({}, image, vk::ImageViewType::e2D, format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
         image_views.emplace_back(device, image_view_create_info);
     }
 }
 
-void SwapChain::addRenderPass(const vk::raii::Device& device, const vk::RenderPass& render_pass) {
+void SwapChain::initializeFramebuffers(const vk::raii::Device& device, const vk::RenderPass& render_pass) {
     framebuffers.clear();
 
     for (auto& image_view : image_views) {
@@ -80,7 +80,7 @@ size_t SwapChain::length() const {
 }
 
 const vk::Framebuffer& SwapChain::getFramebuffer(size_t index) const {
-    return *framebuffers[index];
+    return *framebuffers.at(index);
 }
 
 const vk::SwapchainKHR& SwapChain::get() const {
@@ -110,6 +110,15 @@ vk::Extent2D SwapChain::chooseExtent(const vk::SurfaceCapabilitiesKHR& capabilit
             std::clamp(window_size.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
             std::clamp(window_size.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height));
     }
+}
+
+uint32_t SwapChain::chooseImageCount(const vk::SurfaceCapabilitiesKHR& capabilities) {
+    uint32_t image_count = capabilities.minImageCount + 1;
+    if (capabilities.maxImageCount > 0) {
+        image_count = std::min(image_count, capabilities.maxImageCount);
+    }
+
+    return image_count;
 }
 
 }  // namespace visualization

@@ -43,9 +43,9 @@ private:
 
     static vk::raii::Instance buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version);
     static vk::raii::Device buildLogicalDevice(const QueueFamilyIndices& queue_family_indices, const vk::raii::PhysicalDevice& physical_device);
+    static vk::raii::RenderPass buildRenderPass(const vk::raii::Device& device, vk::Format color_format);
 
     void buildSwapChain();
-    void buildRenderPass();
     void buildGraphicsPipeline();
 
     void recordCommandBuffer(vk::CommandBuffer command_buffer, const vk::Framebuffer& framebuffer);
@@ -77,8 +77,6 @@ private:
     vk::raii::Queue graphics_queue;
     vk::raii::Queue present_queue;
 
-    SwapChain swap_chain;
-
     vk::raii::PipelineLayout pipeline_layout;
     vk::raii::RenderPass render_pass;
     vk::raii::Pipeline pipeline;
@@ -88,6 +86,8 @@ private:
     static constexpr size_t max_frames_in_flight = 2;
     std::array<FrameSync, max_frames_in_flight> frame_sync;
     size_t frame_index = 0;
+
+    SwapChain swap_chain;
 };
 
 }  // namespace visualization

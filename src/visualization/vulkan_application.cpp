@@ -23,14 +23,14 @@ VulkanApplication::VulkanApplication(std::string name, Window* window)
       device(buildLogicalDevice(queue_family_indices, physical_device)),
       graphics_queue(device.getQueue(queue_family_indices.graphics_family.value(), 0)),
       present_queue(device.getQueue(queue_family_indices.present_family.value(), 0)),
-      swap_chain(device, *surface, SwapChain::Support::query(*physical_device, *surface), window->size()),
       pipeline_layout(nullptr),
       render_pass(nullptr),
       pipeline(nullptr),
       command_pool(createCommandPool(device, queue_family_indices.graphics_family.value())),
-      frame_sync({FrameSync(device, *command_pool), FrameSync(device, *command_pool)}) {
-    buildRenderPass();
-    swap_chain.addRenderPass(device, *render_pass);
+      frame_sync({FrameSync(device, *command_pool), FrameSync(device, *command_pool)}),
+      swap_chain(*physical_device, device, *surface, window->size()) {
+    render_pass = buildRenderPass(device, swap_chain.getFormat());
+    swap_chain.initializeFramebuffers(device, *render_pass);
     buildGraphicsPipeline();
 }
 
@@ -43,17 +43,7 @@ void VulkanApplication::exit() {
 }
 
 void VulkanApplication::onResize() {
-    device.waitIdle();
-
-    auto support = SwapChain::Support::query(*physical_device, *surface);
-    auto window_size = window->size();
-
-    if (window_size.width == 0 && window_size.height == 0) {
-        return;
-    }
-
-    swap_chain = SwapChain(device, *surface, support, window->size());
-    swap_chain.addRenderPass(device, *render_pass);
+    buildSwapChain();
 }
 
 std::vector<const char*> VulkanApplication::gatherLayers(const std::vector<vk::LayerProperties> available_layers, const std::vector<std::string>& required_layers) {
@@ -164,17 +154,16 @@ vk::raii::Device VulkanApplication::buildLogicalDevice(const QueueFamilyIndices&
 }
 
 void VulkanApplication::buildSwapChain() {
-    vkDeviceWaitIdle(*device);
+    device.waitIdle();
 
-    auto support = SwapChain::Support::query(*physical_device, *surface);
-    swap_chain = SwapChain(device, *surface, support, window->size());
-    swap_chain.addRenderPass(device, *render_pass);
+    swap_chain = SwapChain(*physical_device, device, *surface, window->size());
+    swap_chain.initializeFramebuffers(device, *render_pass);
 }
 
-void VulkanApplication::buildRenderPass() {
+vk::raii::RenderPass VulkanApplication::buildRenderPass(const vk::raii::Device& device, vk::Format color_format) {
     auto color_attachment = vk::AttachmentDescription(
         {},
-        swap_chain.getFormat(),
+        color_format,
         vk::SampleCountFlagBits::e1,
         vk::AttachmentLoadOp::eClear,
         vk::AttachmentStoreOp::eStore,
@@ -186,10 +175,17 @@ void VulkanApplication::buildRenderPass() {
     auto color_reference = vk::AttachmentReference(0, vk::ImageLayout::eColorAttachmentOptimal);
     auto subpass = vk::SubpassDescription({}, vk::PipelineBindPoint::eGraphics, {}, color_reference, {}, {}, {});
 
-    auto subpass_dependency = vk::SubpassDependency(VK_SUBPASS_EXTERNAL, 0u, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, vk::AccessFlagBits::eColorAttachmentWrite, {});
+    auto subpass_dependency = vk::SubpassDependency(
+        VK_SUBPASS_EXTERNAL,
+        0u,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        {},
+        vk::AccessFlagBits::eColorAttachmentWrite,
+        {});
 
     auto render_pass_create_info = vk::RenderPassCreateInfo({}, color_attachment, subpass, subpass_dependency, nullptr);
-    render_pass = vk::raii::RenderPass(device, render_pass_create_info, nullptr);
+    return vk::raii::RenderPass(device, render_pass_create_info, nullptr);
 }
 
 void VulkanApplication::buildGraphicsPipeline() {
