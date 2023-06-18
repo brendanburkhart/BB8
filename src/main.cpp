@@ -1,14 +1,12 @@
 #include <iostream>
 
-#include "visualization/window.hpp"
-#include "visualization/vulkan_application.hpp"
+#include "visualization/visualization.hpp"
 
 int main() {
-    visualization::Window window("BB-8 Simulation");
-    visualization::VulkanApplication vulkan("BB-8 Simulation", &window);
+    visualization::Visualization visualization("BB-8 Simulation");
 
     try {
-        vulkan.run();
+        visualization.run();
     } catch (std::exception& e) {
         std::cerr << e.what() << std::endl;
     }

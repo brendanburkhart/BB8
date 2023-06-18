@@ -22,25 +22,19 @@ Window::Window(std::string name) {
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     window_handle = glfwCreateWindow(default_width, default_height, name.c_str(), nullptr, nullptr);
     if (window_handle == nullptr) {
         throwGLFWError();
     }
+
+    glfwSetWindowUserPointer(window_handle, this);
+    glfwSetFramebufferSizeCallback(window_handle, resizeCallback);
 }
 
 Window::~Window() {
     glfwDestroyWindow(window_handle);
     glfwTerminate();
-}
-
-bool Window::update() {
-    if (glfwWindowShouldClose(window_handle)) {
-        return false;
-    }
-
-    glfwPollEvents();
-    return true;
 }
 
 std::vector<std::string> Window::requiredVulkanExtensions() const {
@@ -66,11 +60,48 @@ vk::Extent2D Window::size() const {
     return vk::Extent2D(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 }
 
+bool Window::is_minimized() const {
+    int width, height;
+    glfwGetFramebufferSize(window_handle, &width, &height);
+
+    return width == 0 && height == 0;
+}
+
 vk::raii::SurfaceKHR Window::createSurface(vk::raii::Instance& vulkan_instance) {
     VkSurfaceKHR surface_handle;
     glfwCreateWindowSurface(static_cast<VkInstance>(*vulkan_instance), window_handle, nullptr, &surface_handle);
 
     return vk::raii::SurfaceKHR(vulkan_instance, surface_handle);
+}
+
+bool Window::update() {
+    if (glfwWindowShouldClose(window_handle)) {
+        return true;
+    }
+
+    glfwPollEvents();
+    return false;
+}
+
+bool Window::wait() {
+    if (glfwWindowShouldClose(window_handle)) {
+        return true;
+    }
+
+    glfwWaitEvents();
+    return false;
+}
+
+void Window::setResizeCallback(std::function<void()> callback) {
+    resize_callback = callback;
+}
+
+void Window::resizeCallback(GLFWwindow* window_handle, int, int) {
+    auto window = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window_handle));
+
+    if (window->resize_callback) {
+        window->resize_callback();
+    }
 }
 
 }  // namespace visualization

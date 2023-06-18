@@ -29,15 +29,29 @@ VulkanApplication::VulkanApplication(std::string name, Window* window)
       command_pool(createCommandPool(device, queue_family_indices.graphics_family.value())),
       frame_sync({FrameSync(device, *command_pool), FrameSync(device, *command_pool)}) {
     buildRenderPass();
+    swap_chain.addRenderPass(device, *render_pass);
     buildGraphicsPipeline();
 }
 
-void VulkanApplication::run() {
-    while (window->update()) {
-        drawFrame();
+void VulkanApplication::update() {
+    drawFrame();
+}
+
+void VulkanApplication::exit() {
+    device.waitIdle();
+}
+
+void VulkanApplication::onResize() {
+    device.waitIdle();
+
+    auto support = SwapChain::Support::query(*physical_device, *surface);
+    auto window_size = window->size();
+
+    if (window_size.width == 0 && window_size.height == 0) {
+        return;
     }
 
-    device.waitIdle();
+    swap_chain = SwapChain(device, *surface, support, window->size());
 }
 
 std::vector<const char*> VulkanApplication::gatherLayers(const std::vector<vk::LayerProperties> available_layers, const std::vector<std::string>& required_layers) {
@@ -142,6 +156,14 @@ vk::raii::Device VulkanApplication::buildLogicalDevice(const QueueFamilyIndices&
     return vk::raii::Device(physical_device, device_create_info);
 }
 
+void VulkanApplication::buildSwapChain() {
+    vkDeviceWaitIdle(*device);
+
+    auto support = SwapChain::Support::query(*physical_device, *surface);
+    swap_chain = SwapChain(device, *surface, support, window->size());
+    swap_chain.addRenderPass(device, *render_pass);
+}
+
 void VulkanApplication::buildRenderPass() {
     auto color_attachment = vk::AttachmentDescription(
         {},
@@ -161,8 +183,6 @@ void VulkanApplication::buildRenderPass() {
 
     auto render_pass_create_info = vk::RenderPassCreateInfo({}, color_attachment, subpass, subpass_dependency, nullptr);
     render_pass = vk::raii::RenderPass(device, render_pass_create_info, nullptr);
-
-    swap_chain.addRenderPass(device, *render_pass);
 }
 
 void VulkanApplication::buildGraphicsPipeline() {
@@ -265,16 +285,24 @@ void VulkanApplication::drawFrame() {
     frame_sync[frame_index].waitUntilReady(*device);
 
     auto [acquire_result, image_index] = frame_sync[frame_index].acquireNextImage(swap_chain);
-    assert(acquire_result == vk::Result::eSuccess);
+    if (acquire_result == vk::Result::eErrorOutOfDateKHR) {
+        return;
+    } else if (acquire_result != vk::Result::eSuccess && acquire_result != vk::Result::eSuboptimalKHR) {
+        throw std::runtime_error("failed to acquire swap chain image");
+    }
     assert(image_index < swap_chain.length());
 
-    frame_sync[frame_index].getCommandBuffer().reset();
+    frame_sync[frame_index].reset(*device);
     recordCommandBuffer(frame_sync[frame_index].getCommandBuffer(), swap_chain.getFramebuffer(image_index));
 
     frame_sync[frame_index].submitTo(graphics_queue);
 
     auto present_result = frame_sync[frame_index].presentTo(present_queue, swap_chain, image_index);
-    assert(present_result == vk::Result::eSuccess);
+    if (present_result == vk::Result::eErrorOutOfDateKHR) {
+        return;
+    } else if (present_result != vk::Result::eSuccess && present_result != vk::Result::eSuboptimalKHR) {
+        throw std::runtime_error("failed to present rendered image to swap chain");
+    }
 
     frame_index = (frame_index + 1) % max_frames_in_flight;
 }

@@ -15,6 +15,7 @@ public:
     const vk::CommandBuffer& getCommandBuffer() const;
 
     void waitUntilReady(const vk::Device& device) const;
+    void reset(const vk::Device& device);
 
     std::tuple<vk::Result, uint32_t> acquireNextImage(SwapChain& swap_chain);
 

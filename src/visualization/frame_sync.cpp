@@ -15,7 +15,11 @@ const vk::CommandBuffer& FrameSync::getCommandBuffer() const {
 void FrameSync::waitUntilReady(const vk::Device& device) const {
     vk::Result wait_result = device.waitForFences(*in_flight_fence, true, timeout);
     assert(wait_result == vk::Result::eSuccess);
+}
+
+void FrameSync::reset(const vk::Device& device) {
     device.resetFences(*in_flight_fence);
+    command_buffer.reset();
 }
 
 std::tuple<vk::Result, uint32_t> FrameSync::acquireNextImage(SwapChain& swap_chain) {

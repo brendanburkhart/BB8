@@ -16,7 +16,10 @@ class VulkanApplication {
 public:
     VulkanApplication(std::string name, Window* window);
 
-    void run();
+    void update();
+    void exit();
+
+    void onResize();
 
 private:
     class QueueFamilyIndices {
@@ -41,6 +44,7 @@ private:
     static vk::raii::Instance buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version);
     static vk::raii::Device buildLogicalDevice(const QueueFamilyIndices& queue_family_indices, const vk::raii::PhysicalDevice& physical_device);
 
+    void buildSwapChain();
     void buildRenderPass();
     void buildGraphicsPipeline();
 
