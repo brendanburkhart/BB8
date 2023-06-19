@@ -6,6 +6,7 @@ shaders = files([
 ])
 
 shaders_src = files([
+    'uniform_buffer_object.cpp',
     'vertex.cpp',
 ])
 

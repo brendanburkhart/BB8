@@ -12,23 +12,34 @@ public:
         Requirements(size_t size,
                      vk::MemoryPropertyFlags properties,
                      vk::BufferUsageFlags usage,
-                     vk::SharingMode sharing_mode, bool is_staging);
+                     vk::SharingMode sharing_mode,
+                     bool keep_mapped);
 
         static Requirements staging(size_t size);
         static Requirements vertex(size_t size);
         static Requirements index(size_t size);
+        static Requirements uniform(size_t size);
 
         size_t size;
         vk::MemoryPropertyFlags properties;
         vk::BufferUsageFlags usage;
         vk::SharingMode sharing_mode;
-        bool is_staging;
+        bool keep_mapped;
     };
 
     Buffer(const vk::PhysicalDevice& physical_sdevice, const vk::raii::Device& device, Requirements requirements);
 
+    Buffer(const Buffer&) = delete;
+    Buffer& operator=(const Buffer&) = delete;
+
+    Buffer(Buffer&&) = default;
+    Buffer& operator=(Buffer&&) = default;
+
+    ~Buffer();
+
     void fill(void* data, size_t size);
 
+    uint8_t* data() const;
     vk::Buffer get();
 
     static void copy(Buffer& source, Buffer& destination, const vk::CommandBuffer& command_buffer, const vk::Queue& transfer_queue);
@@ -41,6 +52,8 @@ private:
     vk::raii::Buffer buffer;
     vk::raii::DeviceMemory memory;
     const size_t size;
+
+    uint8_t* mapped_data = nullptr;
 };
 
 }  // namespace visualization

@@ -2,13 +2,19 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "shaders.hpp"
+#include "shaders/uniform_buffer_object.hpp"
 #include "shaders/vertex.hpp"
 
 namespace visualization {
@@ -25,14 +31,17 @@ VulkanApplication::VulkanApplication(std::string name, Window* window)
       device(buildLogicalDevice(queue_family_indices, physical_device)),
       graphics_queue(device.getQueue(queue_family_indices.graphics_family.value(), 0)),
       present_queue(device.getQueue(queue_family_indices.present_family.value(), 0)),
+      descriptor_set_layout(buildDescriptorLayout(device)),
       pipeline_layout(nullptr),
       render_pass(nullptr),
       pipeline(nullptr),
       command_pool(createCommandPool(device, queue_family_indices.graphics_family.value())),
       transient_pool(createTransientPool(device, queue_family_indices.graphics_family.value())),
+      descriptor_pool(createDescriptorPool(device)),
       vertex_buffer(buildVertexBuffer()),
       index_buffer(buildIndexBuffer()),
-      frame_sync({FrameSync(device, *command_pool), FrameSync(device, *command_pool)}),
+      frames({FrameResources(*physical_device, device, *command_pool, *descriptor_pool, *descriptor_set_layout),
+              FrameResources(*physical_device, device, *command_pool, *descriptor_pool, *descriptor_set_layout)}),
       swap_chain(*physical_device, device, *surface, window->size()) {
     render_pass = buildRenderPass(device, swap_chain.getFormat());
     swap_chain.initializeFramebuffers(device, *render_pass);
@@ -131,6 +140,12 @@ vk::raii::CommandBuffer VulkanApplication::createCommandBuffer(const vk::raii::D
     return std::move(vk::raii::CommandBuffers(device, allocate_info).front());
 }
 
+vk::raii::DescriptorSetLayout VulkanApplication::buildDescriptorLayout(const vk::raii::Device& device) {
+    auto layout_bindings = shaders::UniformBufferObject::layoutBinding();
+    auto descriptor_layout_create_info = vk::DescriptorSetLayoutCreateInfo({}, layout_bindings);
+    return vk::raii::DescriptorSetLayout(device, descriptor_layout_create_info);
+}
+
 vk::raii::Instance VulkanApplication::buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version) {
     vk::ApplicationInfo app_info = vk::ApplicationInfo(app_name.c_str(), app_version, nullptr, 0, api_version);
 
@@ -198,6 +213,13 @@ vk::raii::RenderPass VulkanApplication::buildRenderPass(const vk::raii::Device& 
     return vk::raii::RenderPass(device, render_pass_create_info, nullptr);
 }
 
+vk::raii::DescriptorPool VulkanApplication::createDescriptorPool(const vk::raii::Device& device) {
+    auto pool_size = vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, max_frames_in_flight);
+    auto create_info = vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, max_frames_in_flight, pool_size);
+
+    return vk::raii::DescriptorPool(device, create_info);
+}
+
 Buffer VulkanApplication::buildVertexBuffer() {
     size_t size = vertex_data.size() * sizeof(vertex_data[0]);
     Buffer staging = Buffer(*physical_device, device, Buffer::Requirements::staging(size));
@@ -250,17 +272,17 @@ void VulkanApplication::buildGraphicsPipeline() {
     std::vector<vk::DynamicState> dynamic_states = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
     auto dynamic_states_create_info = vk::PipelineDynamicStateCreateInfo({}, dynamic_states, nullptr);
 
-    auto rasterizer = vk::PipelineRasterizationStateCreateInfo({},                           // flags
-                                                               false,                        // depthClampEnable
-                                                               false,                        // rasterizerDiscardEnable
-                                                               vk::PolygonMode::eFill,       // polygonMode
-                                                               vk::CullModeFlagBits::eBack,  // cullMode
-                                                               vk::FrontFace::eClockwise,    // frontFace
-                                                               false,                        // depthBiasEnable
-                                                               0.0f,                         // depthBiasConstantFactor
-                                                               0.0f,                         // depthBiasClamp
-                                                               0.0f,                         // depthBiasSlopeFactor
-                                                               1.0f                          // lineWidth
+    auto rasterizer = vk::PipelineRasterizationStateCreateInfo({},                                // flags
+                                                               false,                             // depthClampEnable
+                                                               false,                             // rasterizerDiscardEnable
+                                                               vk::PolygonMode::eFill,            // polygonMode
+                                                               vk::CullModeFlagBits::eBack,       // cullMode
+                                                               vk::FrontFace::eCounterClockwise,  // frontFace
+                                                               false,                             // depthBiasEnable
+                                                               0.0f,                              // depthBiasConstantFactor
+                                                               0.0f,                              // depthBiasClamp
+                                                               0.0f,                              // depthBiasSlopeFactor
+                                                               1.0f                               // lineWidth
     );
 
     auto multisample = vk::PipelineMultisampleStateCreateInfo({}, vk::SampleCountFlagBits::e1);
@@ -284,7 +306,7 @@ void VulkanApplication::buildGraphicsPipeline() {
                                                              {{1.0f, 1.0f, 1.0f, 1.0f}}  // blendConstants
     );
 
-    auto layout_create_info = vk::PipelineLayoutCreateInfo({}, {}, {}, nullptr);
+    auto layout_create_info = vk::PipelineLayoutCreateInfo({}, *descriptor_set_layout, {});
     pipeline_layout = vk::raii::PipelineLayout(device, layout_create_info);
 
     auto pipeline_create_info = vk::GraphicsPipelineCreateInfo(
@@ -305,6 +327,21 @@ void VulkanApplication::buildGraphicsPipeline() {
     pipeline = vk::raii::Pipeline(device, nullptr, pipeline_create_info);
 }
 
+void VulkanApplication::updateUniformBuffer() {
+    static auto startTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    shaders::UniformBufferObject ubo;
+    ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    float aspect_ratio = swap_chain.getExtent().width / (float)swap_chain.getExtent().height;
+    ubo.projection = glm::perspective(glm::radians(45.0f), aspect_ratio, 0.1f, 10.0f);
+    ubo.projection[1][1] *= -1.0;
+
+    frames[frame_index].writeUniformBuffer(ubo);
+}
+
 void VulkanApplication::recordCommandBuffer(vk::CommandBuffer command_buffer, const vk::Framebuffer& framebuffer) {
     auto buffer_begin_info = vk::CommandBufferBeginInfo({}, nullptr);
     command_buffer.begin(buffer_begin_info);
@@ -318,6 +355,8 @@ void VulkanApplication::recordCommandBuffer(vk::CommandBuffer command_buffer, co
     command_buffer.bindVertexBuffers(0, vertex_buffer.get(), vk::DeviceSize(0));
     command_buffer.bindIndexBuffer(index_buffer.get(), vk::DeviceSize(0), vk::IndexType::eUint16);
 
+    command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipeline_layout, 0, frames[frame_index].getDescriptor(), {});
+
     auto viewport = vk::Viewport(0.0, 0.0, swap_chain.getExtent().width, swap_chain.getExtent().height, 0.0, 1.0);
     command_buffer.setViewport(0, viewport);
     command_buffer.setScissor(0, render_area);
@@ -329,9 +368,11 @@ void VulkanApplication::recordCommandBuffer(vk::CommandBuffer command_buffer, co
 }
 
 void VulkanApplication::drawFrame() {
-    frame_sync[frame_index].waitUntilReady(*device);
+    auto& frame = frames[frame_index];
 
-    auto [acquire_result, image_index] = frame_sync[frame_index].acquireNextImage(swap_chain);
+    frame.waitUntilReady(*device);
+
+    auto [acquire_result, image_index] = frame.acquireNextImage(swap_chain);
     if (acquire_result == vk::Result::eErrorOutOfDateKHR) {
         return;
     } else if (acquire_result != vk::Result::eSuccess && acquire_result != vk::Result::eSuboptimalKHR) {
@@ -339,12 +380,15 @@ void VulkanApplication::drawFrame() {
     }
     assert(image_index < swap_chain.length());
 
-    frame_sync[frame_index].reset(*device);
-    recordCommandBuffer(frame_sync[frame_index].getCommandBuffer(), swap_chain.getFramebuffer(image_index));
+    frame.reset(*device);
 
-    frame_sync[frame_index].submitTo(graphics_queue);
+    updateUniformBuffer();
 
-    auto present_result = frame_sync[frame_index].presentTo(present_queue, swap_chain, image_index);
+    recordCommandBuffer(frame.getCommandBuffer(), swap_chain.getFramebuffer(image_index));
+
+    frame.submitTo(graphics_queue);
+
+    auto present_result = frame.presentTo(present_queue, swap_chain, image_index);
     if (present_result == vk::Result::eErrorOutOfDateKHR) {
         return;
     } else if (present_result != vk::Result::eSuccess && present_result != vk::Result::eSuboptimalKHR) {

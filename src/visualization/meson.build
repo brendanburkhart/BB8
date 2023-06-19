@@ -2,7 +2,7 @@ subdir('shaders')
 
 visualization_src = files([
     'buffer.cpp',
-    'frame_sync.cpp',
+    'frame_resources.cpp',
     'swap_chain.cpp',
     'visualization.cpp',
     'vulkan_application.cpp',

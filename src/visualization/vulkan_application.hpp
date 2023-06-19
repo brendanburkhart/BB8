@@ -7,7 +7,7 @@
 #include <vulkan/vulkan_raii.hpp>
 
 #include "buffer.hpp"
-#include "frame_sync.hpp"
+#include "frame_resources.hpp"
 #include "shaders/vertex.hpp"
 #include "swap_chain.hpp"
 #include "window.hpp"
@@ -42,9 +42,12 @@ private:
 
     static vk::raii::CommandBuffer createCommandBuffer(const vk::raii::Device& device, const vk::raii::CommandPool& command_pool);
 
+    static vk::raii::DescriptorSetLayout buildDescriptorLayout(const vk::raii::Device& device);
     static vk::raii::Instance buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version);
     static vk::raii::Device buildLogicalDevice(const QueueFamilyIndices& queue_family_indices, const vk::raii::PhysicalDevice& physical_device);
     static vk::raii::RenderPass buildRenderPass(const vk::raii::Device& device, vk::Format color_format);
+
+    static vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device);
 
     Buffer buildVertexBuffer();
     Buffer buildIndexBuffer();
@@ -52,8 +55,9 @@ private:
     void buildSwapChain();
     void buildGraphicsPipeline();
 
+    void updateUniformBuffer();
     void recordCommandBuffer(vk::CommandBuffer command_buffer, const vk::Framebuffer& framebuffer);
-
+    
     void drawFrame();
 
     static const std::vector<std::string> validation_layers;
@@ -81,12 +85,15 @@ private:
     vk::raii::Queue graphics_queue;
     vk::raii::Queue present_queue;
 
+    vk::raii::DescriptorSetLayout descriptor_set_layout;
     vk::raii::PipelineLayout pipeline_layout;
     vk::raii::RenderPass render_pass;
     vk::raii::Pipeline pipeline;
 
     vk::raii::CommandPool command_pool;
     vk::raii::CommandPool transient_pool;
+
+    vk::raii::DescriptorPool descriptor_pool;
 
     const std::array<shaders::Vertex, 4> vertex_data = {
         shaders::Vertex({-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}),
@@ -98,7 +105,7 @@ private:
     Buffer index_buffer;
 
     static constexpr size_t max_frames_in_flight = 2;
-    std::array<FrameSync, max_frames_in_flight> frame_sync;
+    std::array<FrameResources, max_frames_in_flight> frames;
     size_t frame_index = 0;
 
     SwapChain swap_chain;

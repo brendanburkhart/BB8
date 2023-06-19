@@ -2,24 +2,36 @@
 
 namespace visualization {
 
-Buffer::Requirements::Requirements(size_t size, vk::MemoryPropertyFlags properties, vk::BufferUsageFlags usage, vk::SharingMode sharing_mode, bool is_staging)
-    : size(size), properties(properties), usage(usage), sharing_mode(sharing_mode), is_staging(is_staging) {}
+Buffer::Requirements::Requirements(size_t size, vk::MemoryPropertyFlags properties, vk::BufferUsageFlags usage, vk::SharingMode sharing_mode, bool keep_mapped)
+    : size(size), properties(properties), usage(usage), sharing_mode(sharing_mode), keep_mapped(keep_mapped) {
+    auto host_visible = vk::MemoryPropertyFlagBits::eHostVisible;
+    bool can_map = (properties & host_visible) == host_visible;
+    if (keep_mapped && !can_map) {
+        throw std::runtime_error("Requirement::keep_mapped specified, but buffer will not be host visible");
+    }
+}
 
 Buffer::Requirements Buffer::Requirements::staging(size_t size) {
     auto properties = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
     auto usage = vk::BufferUsageFlagBits::eTransferSrc;
-    return Requirements(size, properties, usage, vk::SharingMode::eExclusive, true);
+    return Requirements(size, properties, usage, vk::SharingMode::eExclusive, false);
 }
 
 Buffer::Requirements Buffer::Requirements::vertex(size_t size) {
     auto properties = vk::MemoryPropertyFlagBits::eDeviceLocal;
     auto usage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst;
-    return Requirements(size, properties, usage, vk::SharingMode::eExclusive, true);
+    return Requirements(size, properties, usage, vk::SharingMode::eExclusive, false);
 }
 
 Buffer::Requirements Buffer::Requirements::index(size_t size) {
     auto properties = vk::MemoryPropertyFlagBits::eDeviceLocal;
     auto usage = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst;
+    return Requirements(size, properties, usage, vk::SharingMode::eExclusive, false);
+}
+
+Buffer::Requirements Buffer::Requirements::uniform(size_t size) {
+    auto properties = vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent;
+    auto usage = vk::BufferUsageFlagBits::eUniformBuffer;
     return Requirements(size, properties, usage, vk::SharingMode::eExclusive, true);
 }
 
@@ -28,12 +40,29 @@ visualization::Buffer::Buffer(const vk::PhysicalDevice& physical_device, const v
       memory(vk::raii::DeviceMemory(device, memoryAllocationInfo(physical_device, buffer.getMemoryRequirements(), requirements))),
       size(requirements.size) {
     buffer.bindMemory(*memory, 0);
+
+    if (requirements.keep_mapped) {
+        mapped_data = static_cast<uint8_t*>(memory.mapMemory(0, size));
+    }
+}
+
+visualization::Buffer::~Buffer() {
+    if (mapped_data != nullptr) {
+        memory.unmapMemory();
+        mapped_data = nullptr;
+    }
 }
 
 void Buffer::fill(void* data, size_t size) {
-    uint8_t* mapped_data = static_cast<uint8_t*>(memory.mapMemory(0, size));
+    mapped_data = static_cast<uint8_t*>(memory.mapMemory(0, size));
     std::memcpy(mapped_data, data, size);
     memory.unmapMemory();
+    mapped_data = nullptr;
+}
+
+uint8_t* Buffer::data() const {
+    assert(mapped_data != nullptr);
+    return mapped_data;
 }
 
 vk::Buffer Buffer::get() {
