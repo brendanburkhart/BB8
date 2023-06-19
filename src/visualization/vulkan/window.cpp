@@ -14,6 +14,7 @@ void throwGLFWError() {
 }
 
 namespace visualization {
+namespace vulkan {
 
 Window::Window(std::string name) {
     int ok = glfwInit();
@@ -104,4 +105,5 @@ void Window::resizeCallback(GLFWwindow* window_handle, int, int) {
     }
 }
 
+}  // namespace vulkan
 }  // namespace visualization

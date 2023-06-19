@@ -1,5 +1,5 @@
-#ifndef BB8_VISUALIZATION_WINDOW_HPP
-#define BB8_VISUALIZATION_WINDOW_HPP
+#ifndef BB8_VISUALIZATION_VULKAN_WINDOW_HPP
+#define BB8_VISUALIZATION_VULKAN_WINDOW_HPP
 
 #include <cstdint>
 #include <functional>
@@ -12,6 +12,7 @@
 #include <vulkan/vulkan_raii.hpp>
 
 namespace visualization {
+namespace vulkan {
 
 class Window {
 public:
@@ -40,6 +41,7 @@ private:
     static void resizeCallback(GLFWwindow* window, int, int);
 };
 
+}  // namespace vulkan
 }  // namespace visualization
 
-#endif  // !BB8_VISUALIZATION_WINDOW_HPP
+#endif  // !BB8_VISUALIZATION_VULKAN_WINDOW_HPP

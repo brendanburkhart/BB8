@@ -1,4 +1,4 @@
-#include "vulkan_application.hpp"
+#include "application.hpp"
 
 #include <algorithm>
 #include <array>
@@ -18,135 +18,52 @@
 #include "shaders/vertex.hpp"
 
 namespace visualization {
+namespace vulkan {
 
-const std::vector<std::string> VulkanApplication::validation_layers = {"VK_LAYER_KHRONOS_validation"};
-const std::vector<std::string> VulkanApplication::device_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+const std::vector<std::string> Application::validation_layers = {"VK_LAYER_KHRONOS_validation"};
+const std::vector<std::string> Application::device_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-VulkanApplication::VulkanApplication(std::string name, Window* window)
+Application::Application(std::string name, Window* window)
     : window(window),
       instance(buildInstance(context, window, name, VK_MAKE_VERSION(0, 0, 1))),
       surface(window->createSurface(instance)),
-      physical_device(selectPhysicalDevice(instance)),
-      queue_family_indices(findQueueFamilies(physical_device, surface)),
-      device(buildLogicalDevice(queue_family_indices, physical_device)),
-      graphics_queue(device.getQueue(queue_family_indices.graphics_family.value(), 0)),
-      present_queue(device.getQueue(queue_family_indices.present_family.value(), 0)),
+      device(instance, surface, validation_layers, device_extensions),
       descriptor_set_layout(buildDescriptorLayout(device)),
       pipeline_layout(nullptr),
       render_pass(nullptr),
       pipeline(nullptr),
-      command_pool(createCommandPool(device, queue_family_indices.graphics_family.value())),
-      transient_pool(createTransientPool(device, queue_family_indices.graphics_family.value())),
+      command_pool(device.createPool(false)),
+      transient_pool(device.createPool(true)),
       descriptor_pool(createDescriptorPool(device)),
       vertex_buffer(buildVertexBuffer()),
       index_buffer(buildIndexBuffer()),
-      frames({FrameResources(*physical_device, device, *command_pool, *descriptor_pool, *descriptor_set_layout),
-              FrameResources(*physical_device, device, *command_pool, *descriptor_pool, *descriptor_set_layout)}),
-      swap_chain(*physical_device, device, *surface, window->size()) {
+      frames({FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout),
+              FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout)}),
+      swap_chain(device, *surface, window->size()) {
     render_pass = buildRenderPass(device, swap_chain.getFormat());
     swap_chain.initializeFramebuffers(device, *render_pass);
     buildGraphicsPipeline();
 }
 
-void VulkanApplication::update() {
+void Application::update() {
     drawFrame();
 }
 
-void VulkanApplication::exit() {
+void Application::exit() {
     device.waitIdle();
 }
 
-void VulkanApplication::onResize() {
+void Application::onResize() {
     buildSwapChain();
 }
 
-std::vector<const char*> VulkanApplication::gatherLayers(const std::vector<vk::LayerProperties> available_layers, const std::vector<std::string>& required_layers) {
-    std::vector<const char*> layers;
-
-    for (auto const& layer : required_layers) {
-        auto it = std::find_if(
-            available_layers.begin(), available_layers.end(),
-            [layer](vk::LayerProperties l) { return layer == l.layerName; });
-
-        if (it == available_layers.end()) {
-            std::stringstream error_message;
-            error_message << "missing required layer: " << layer;
-            throw std::runtime_error(error_message.str());
-        } else {
-            layers.push_back(layer.data());
-        }
-    }
-
-    return layers;
-}
-
-std::vector<const char*> VulkanApplication::gatherExtensions(const std::vector<vk::ExtensionProperties> available_extensions, const std::vector<std::string>& required_extensions) {
-    std::vector<const char*> extensions;
-
-    for (auto const& extension : required_extensions) {
-        auto it = std::find_if(
-            available_extensions.begin(), available_extensions.end(),
-            [extension](vk::ExtensionProperties e) { return extension == e.extensionName; });
-
-        if (it == available_extensions.end()) {
-            std::stringstream error_message;
-            error_message << "missing required extension: " << extension;
-            throw std::runtime_error(error_message.str());
-        } else {
-            extensions.push_back(extension.data());
-        }
-    }
-
-    return extensions;
-}
-
-VulkanApplication::QueueFamilyIndices VulkanApplication::findQueueFamilies(const vk::raii::PhysicalDevice& device, const vk::raii::SurfaceKHR& surface) {
-    QueueFamilyIndices indices;
-
-    auto queue_families = device.getQueueFamilyProperties();
-
-    for (uint32_t index = 0; index < queue_families.size(); index++) {
-        if (queue_families[index].queueFlags & vk::QueueFlagBits::eGraphics) {
-            indices.graphics_family = index;
-        }
-
-        vk::Bool32 present_support = device.getSurfaceSupportKHR(index, *surface);
-        if (present_support) {
-            indices.present_family = index;
-        }
-    }
-
-    return indices;
-}
-
-vk::raii::PhysicalDevice VulkanApplication::selectPhysicalDevice(const vk::raii::Instance& instance) {
-    vk::raii::PhysicalDevices devices(instance);
-
-    return std::move(devices.front());
-}
-
-vk::raii::CommandPool VulkanApplication::createCommandPool(const vk::raii::Device& device, uint32_t queue_family_index) {
-    auto create_info = vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, queue_family_index);
-    return vk::raii::CommandPool(device, create_info);
-}
-
-vk::raii::CommandPool VulkanApplication::createTransientPool(const vk::raii::Device& device, uint32_t queue_family_index) {
-    auto create_info = vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlagBits::eTransient, queue_family_index);
-    return vk::raii::CommandPool(device, create_info);
-}
-
-vk::raii::CommandBuffer VulkanApplication::createCommandBuffer(const vk::raii::Device& device, const vk::raii::CommandPool& command_pool) {
-    auto allocate_info = vk::CommandBufferAllocateInfo(*command_pool, vk::CommandBufferLevel::ePrimary, 1);
-    return std::move(vk::raii::CommandBuffers(device, allocate_info).front());
-}
-
-vk::raii::DescriptorSetLayout VulkanApplication::buildDescriptorLayout(const vk::raii::Device& device) {
+vk::raii::DescriptorSetLayout Application::buildDescriptorLayout(const Device& device) {
     auto layout_bindings = shaders::UniformBufferObject::layoutBinding();
     auto descriptor_layout_create_info = vk::DescriptorSetLayoutCreateInfo({}, layout_bindings);
-    return vk::raii::DescriptorSetLayout(device, descriptor_layout_create_info);
+    return vk::raii::DescriptorSetLayout(device.logical(), descriptor_layout_create_info);
 }
 
-vk::raii::Instance VulkanApplication::buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version) {
+vk::raii::Instance Application::buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version) {
     vk::ApplicationInfo app_info = vk::ApplicationInfo(app_name.c_str(), app_version, nullptr, 0, api_version);
 
     auto required_layers = enable_validation_layers ? validation_layers : std::vector<std::string>();
@@ -162,30 +79,20 @@ vk::raii::Instance VulkanApplication::buildInstance(const vk::raii::Context& con
     return instance;
 }
 
-vk::raii::Device VulkanApplication::buildLogicalDevice(const QueueFamilyIndices& queue_family_indices, const vk::raii::PhysicalDevice& physical_device) {
-    if (!queue_family_indices.graphics_family || !queue_family_indices.present_family) {
-        throw std::runtime_error("cannot find queues for both graphics and present");
-    }
-
+Device Application::buildDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface) {
     auto required_layers = enable_validation_layers ? validation_layers : std::vector<std::string>();
-    auto enabled_layers = gatherLayers(physical_device.enumerateDeviceLayerProperties(), required_layers);
-    auto enabled_extensions = gatherExtensions(physical_device.enumerateDeviceExtensionProperties(), device_extensions);
 
-    float queue_priority = 0.0f;
-
-    vk::DeviceQueueCreateInfo queue_create_info(vk::DeviceQueueCreateFlags(), queue_family_indices.graphics_family.value(), 1, &queue_priority);
-    vk::DeviceCreateInfo device_create_info(vk::DeviceCreateFlags(), queue_create_info, enabled_layers, enabled_extensions, nullptr);
-    return vk::raii::Device(physical_device, device_create_info);
+    return Device(instance, surface, required_layers, device_extensions);
 }
 
-void VulkanApplication::buildSwapChain() {
+void Application::buildSwapChain() {
     device.waitIdle();
 
-    swap_chain = SwapChain(*physical_device, device, *surface, window->size());
+    swap_chain = SwapChain(device, *surface, window->size());
     swap_chain.initializeFramebuffers(device, *render_pass);
 }
 
-vk::raii::RenderPass VulkanApplication::buildRenderPass(const vk::raii::Device& device, vk::Format color_format) {
+vk::raii::RenderPass Application::buildRenderPass(const Device& device, vk::Format color_format) {
     auto color_attachment = vk::AttachmentDescription(
         {},
         color_format,
@@ -210,52 +117,52 @@ vk::raii::RenderPass VulkanApplication::buildRenderPass(const vk::raii::Device& 
         {});
 
     auto render_pass_create_info = vk::RenderPassCreateInfo({}, color_attachment, subpass, subpass_dependency, nullptr);
-    return vk::raii::RenderPass(device, render_pass_create_info, nullptr);
+    return vk::raii::RenderPass(device.logical(), render_pass_create_info, nullptr);
 }
 
-vk::raii::DescriptorPool VulkanApplication::createDescriptorPool(const vk::raii::Device& device) {
+vk::raii::DescriptorPool Application::createDescriptorPool(const Device& device) {
     auto pool_size = vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, max_frames_in_flight);
     auto create_info = vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, max_frames_in_flight, pool_size);
 
-    return vk::raii::DescriptorPool(device, create_info);
+    return vk::raii::DescriptorPool(device.logical(), create_info);
 }
 
-Buffer VulkanApplication::buildVertexBuffer() {
+Buffer Application::buildVertexBuffer() {
     size_t size = vertex_data.size() * sizeof(vertex_data[0]);
-    Buffer staging = Buffer(*physical_device, device, Buffer::Requirements::staging(size));
-    Buffer vertex_buffer = Buffer(*physical_device, device, Buffer::Requirements::vertex(size));
+    Buffer staging = Buffer(device, Buffer::Requirements::staging(size));
+    Buffer vertex_buffer = Buffer(device, Buffer::Requirements::vertex(size));
 
     staging.fill((void*)vertex_data.data(), size);
 
     auto allocate_info = vk::CommandBufferAllocateInfo(*transient_pool, vk::CommandBufferLevel::ePrimary, 1);
-    auto command_buffers = vk::raii::CommandBuffers(device, allocate_info);
+    auto command_buffers = vk::raii::CommandBuffers(device.logical(), allocate_info);
 
-    Buffer::copy(staging, vertex_buffer, *command_buffers.front(), *graphics_queue);
+    Buffer::copy(staging, vertex_buffer, *command_buffers.front(), device.queue());
 
     return vertex_buffer;
 }
 
-Buffer VulkanApplication::buildIndexBuffer() {
+Buffer Application::buildIndexBuffer() {
     size_t size = vertex_indices.size() * sizeof(vertex_indices[0]);
-    Buffer staging = Buffer(*physical_device, device, Buffer::Requirements::staging(size));
-    Buffer index_buffer = Buffer(*physical_device, device, Buffer::Requirements::index(size));
+    Buffer staging = Buffer(device, Buffer::Requirements::staging(size));
+    Buffer index_buffer = Buffer(device, Buffer::Requirements::index(size));
 
     staging.fill((void*)vertex_indices.data(), size);
 
     auto allocate_info = vk::CommandBufferAllocateInfo(*transient_pool, vk::CommandBufferLevel::ePrimary, 1);
-    auto command_buffers = vk::raii::CommandBuffers(device, allocate_info);
+    auto command_buffers = vk::raii::CommandBuffers(device.logical(), allocate_info);
 
-    Buffer::copy(staging, index_buffer, *command_buffers.front(), *graphics_queue);
+    Buffer::copy(staging, index_buffer, *command_buffers.front(), device.queue());
 
     return index_buffer;
 }
 
-void VulkanApplication::buildGraphicsPipeline() {
+void Application::buildGraphicsPipeline() {
     auto vert_shader_create_info = vk::ShaderModuleCreateInfo({}, shaders::vert_shader, nullptr);
-    auto vert_shader_module = vk::raii::ShaderModule(device, vert_shader_create_info);
+    auto vert_shader_module = vk::raii::ShaderModule(device.logical(), vert_shader_create_info);
 
     auto frag_shader_create_info = vk::ShaderModuleCreateInfo({}, shaders::frag_shader, nullptr);
-    auto frag_shader_module = vk::raii::ShaderModule(device, frag_shader_create_info);
+    auto frag_shader_module = vk::raii::ShaderModule(device.logical(), frag_shader_create_info);
 
     std::array<vk::PipelineShaderStageCreateInfo, 2> shader_stages = {
         vk::PipelineShaderStageCreateInfo({}, vk::ShaderStageFlagBits::eVertex, *vert_shader_module, "main"),
@@ -307,7 +214,7 @@ void VulkanApplication::buildGraphicsPipeline() {
     );
 
     auto layout_create_info = vk::PipelineLayoutCreateInfo({}, *descriptor_set_layout, {});
-    pipeline_layout = vk::raii::PipelineLayout(device, layout_create_info);
+    pipeline_layout = vk::raii::PipelineLayout(device.logical(), layout_create_info);
 
     auto pipeline_create_info = vk::GraphicsPipelineCreateInfo(
         {},
@@ -324,10 +231,10 @@ void VulkanApplication::buildGraphicsPipeline() {
         *pipeline_layout,
         *render_pass);
 
-    pipeline = vk::raii::Pipeline(device, nullptr, pipeline_create_info);
+    pipeline = vk::raii::Pipeline(device.logical(), nullptr, pipeline_create_info);
 }
 
-void VulkanApplication::updateUniformBuffer() {
+void Application::updateUniformBuffer() {
     static auto startTime = std::chrono::high_resolution_clock::now();
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
@@ -342,7 +249,7 @@ void VulkanApplication::updateUniformBuffer() {
     frames[frame_index].writeUniformBuffer(ubo);
 }
 
-void VulkanApplication::recordCommandBuffer(vk::CommandBuffer command_buffer, const vk::Framebuffer& framebuffer) {
+void Application::recordCommandBuffer(vk::CommandBuffer command_buffer, const vk::Framebuffer& framebuffer) {
     auto buffer_begin_info = vk::CommandBufferBeginInfo({}, nullptr);
     command_buffer.begin(buffer_begin_info);
 
@@ -367,10 +274,10 @@ void VulkanApplication::recordCommandBuffer(vk::CommandBuffer command_buffer, co
     command_buffer.end();
 }
 
-void VulkanApplication::drawFrame() {
+void Application::drawFrame() {
     auto& frame = frames[frame_index];
 
-    frame.waitUntilReady(*device);
+    frame.waitUntilReady(device);
 
     auto [acquire_result, image_index] = frame.acquireNextImage(swap_chain);
     if (acquire_result == vk::Result::eErrorOutOfDateKHR) {
@@ -380,15 +287,15 @@ void VulkanApplication::drawFrame() {
     }
     assert(image_index < swap_chain.length());
 
-    frame.reset(*device);
+    frame.reset(device);
 
     updateUniformBuffer();
 
     recordCommandBuffer(frame.getCommandBuffer(), swap_chain.getFramebuffer(image_index));
 
-    frame.submitTo(graphics_queue);
+    frame.submitTo(device.queue());
 
-    auto present_result = frame.presentTo(present_queue, swap_chain, image_index);
+    auto present_result = frame.presentTo(device.presentQueue(), swap_chain, image_index);
     if (present_result == vk::Result::eErrorOutOfDateKHR) {
         return;
     } else if (present_result != vk::Result::eSuccess && present_result != vk::Result::eSuboptimalKHR) {
@@ -398,4 +305,5 @@ void VulkanApplication::drawFrame() {
     frame_index = (frame_index + 1) % max_frames_in_flight;
 }
 
+}  // namespace vulkan
 }  // namespace visualization

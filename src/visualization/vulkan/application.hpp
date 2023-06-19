@@ -1,22 +1,22 @@
 #ifndef BB8_VISUALIZATION_VULKAN_APPLICATION_HPP
 #define BB8_VISUALIZATION_VULKAN_APPLICATION_HPP
 
-#include <optional>
-#include <string>
-#include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
 #include "buffer.hpp"
+#include "device.hpp"
 #include "frame_resources.hpp"
 #include "shaders/vertex.hpp"
 #include "swap_chain.hpp"
+#include "utilities.hpp"
 #include "window.hpp"
 
 namespace visualization {
+namespace vulkan {
 
-class VulkanApplication {
+class Application {
 public:
-    VulkanApplication(std::string name, Window* window);
+    Application(std::string name, Window* window);
 
     void update();
     void exit();
@@ -30,24 +30,12 @@ private:
         std::optional<uint32_t> present_family;
     };
 
-    static std::vector<const char*> gatherLayers(const std::vector<vk::LayerProperties> available_layers, const std::vector<std::string>& required_layers);
-    static std::vector<const char*> gatherExtensions(const std::vector<vk::ExtensionProperties> available_extensions, const std::vector<std::string>& required_extensions);
-
-    static QueueFamilyIndices findQueueFamilies(const vk::raii::PhysicalDevice& device, const vk::raii::SurfaceKHR& surface);
-
-    static vk::raii::PhysicalDevice selectPhysicalDevice(const vk::raii::Instance& instance);
-
-    static vk::raii::CommandPool createCommandPool(const vk::raii::Device& device, uint32_t queue_family_index);
-    static vk::raii::CommandPool createTransientPool(const vk::raii::Device& device, uint32_t queue_family_index);
-
-    static vk::raii::CommandBuffer createCommandBuffer(const vk::raii::Device& device, const vk::raii::CommandPool& command_pool);
-
-    static vk::raii::DescriptorSetLayout buildDescriptorLayout(const vk::raii::Device& device);
+    static vk::raii::DescriptorSetLayout buildDescriptorLayout(const Device& device);
     static vk::raii::Instance buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version);
-    static vk::raii::Device buildLogicalDevice(const QueueFamilyIndices& queue_family_indices, const vk::raii::PhysicalDevice& physical_device);
-    static vk::raii::RenderPass buildRenderPass(const vk::raii::Device& device, vk::Format color_format);
+    static Device buildDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface);
+    static vk::raii::RenderPass buildRenderPass(const Device& device, vk::Format color_format);
 
-    static vk::raii::DescriptorPool createDescriptorPool(const vk::raii::Device& device);
+    static vk::raii::DescriptorPool createDescriptorPool(const Device& device);
 
     Buffer buildVertexBuffer();
     Buffer buildIndexBuffer();
@@ -57,7 +45,7 @@ private:
 
     void updateUniformBuffer();
     void recordCommandBuffer(vk::CommandBuffer command_buffer, const vk::Framebuffer& framebuffer);
-    
+
     void drawFrame();
 
     static const std::vector<std::string> validation_layers;
@@ -78,12 +66,7 @@ private:
 
     vk::raii::SurfaceKHR surface;
 
-    vk::raii::PhysicalDevice physical_device;
-
-    QueueFamilyIndices queue_family_indices;
-    vk::raii::Device device;
-    vk::raii::Queue graphics_queue;
-    vk::raii::Queue present_queue;
+    Device device;
 
     vk::raii::DescriptorSetLayout descriptor_set_layout;
     vk::raii::PipelineLayout pipeline_layout;
@@ -111,6 +94,7 @@ private:
     SwapChain swap_chain;
 };
 
+}  // namespace vulkan
 }  // namespace visualization
 
 #endif  // !BB8_VISUALIZATION_VULKAN_APPLICATION_HPP

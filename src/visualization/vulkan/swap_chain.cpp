@@ -4,24 +4,24 @@
 #include <stdexcept>
 
 namespace visualization {
+namespace vulkan {
 
-SwapChain::Support SwapChain::Support::query(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface) {
+SwapChain::Support SwapChain::Support::query(const Device& device, const vk::SurfaceKHR& surface) {
     Support support;
 
-    support.capabilities = device.getSurfaceCapabilitiesKHR(surface);
-    support.formats = device.getSurfaceFormatsKHR(surface);
-    support.present_modes = device.getSurfacePresentModesKHR(surface);
+    support.capabilities = device.physical().getSurfaceCapabilitiesKHR(surface);
+    support.formats = device.physical().getSurfaceFormatsKHR(surface);
+    support.present_modes = device.physical().getSurfacePresentModesKHR(surface);
 
     return support;
 }
 
 SwapChain::SwapChain(
-    const vk::PhysicalDevice& physical_device,
-    const vk::raii::Device& device,
+    const Device& device,
     const vk::SurfaceKHR& surface,
     const vk::Extent2D window_size)
     : swap_chain(nullptr) {
-    auto support = Support::query(physical_device, surface);
+    auto support = Support::query(device, surface);
     auto surface_format = chooseSurfaceFormat(support.formats);
     extent = chooseExtent(support.capabilities, window_size);
     format = surface_format.format;
@@ -44,22 +44,22 @@ SwapChain::SwapChain(
         true,
         nullptr);
 
-    swap_chain = vk::raii::SwapchainKHR(device, create_into);
+    swap_chain = vk::raii::SwapchainKHR(device.logical(), create_into);
 
     images = swap_chain.getImages();
 
     for (auto image : images) {
         auto image_view_create_info = vk::ImageViewCreateInfo({}, image, vk::ImageViewType::e2D, format, {}, {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
-        image_views.emplace_back(device, image_view_create_info);
+        image_views.emplace_back(device.logical(), image_view_create_info);
     }
 }
 
-void SwapChain::initializeFramebuffers(const vk::raii::Device& device, const vk::RenderPass& render_pass) {
+void SwapChain::initializeFramebuffers(const Device& device, const vk::RenderPass& render_pass) {
     framebuffers.clear();
 
     for (auto& image_view : image_views) {
         auto framebuffer_create_info = vk::FramebufferCreateInfo({}, render_pass, *image_view, extent.width, extent.height, 1);
-        framebuffers.emplace_back(device, framebuffer_create_info);
+        framebuffers.emplace_back(device.logical(), framebuffer_create_info);
     }
 }
 
@@ -121,4 +121,5 @@ uint32_t SwapChain::chooseImageCount(const vk::SurfaceCapabilitiesKHR& capabilit
     return image_count;
 }
 
+}  // namespace vulkan
 }  // namespace visualization

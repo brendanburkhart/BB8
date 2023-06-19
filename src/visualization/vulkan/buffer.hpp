@@ -1,9 +1,12 @@
-#ifndef BB8_VISUALIZATION_BUFFER_HPP
-#define BB8_VISUALIZATION_BUFFER_HPP
+#ifndef BB8_VISUALIZATION_VULKAN_BUFFER_HPP
+#define BB8_VISUALIZATION_VULKAN_BUFFER_HPP
 
 #include <vulkan/vulkan_raii.hpp>
 
+#include "device.hpp"
+
 namespace visualization {
+namespace vulkan {
 
 class Buffer {
 public:
@@ -27,7 +30,7 @@ public:
         bool keep_mapped;
     };
 
-    Buffer(const vk::PhysicalDevice& physical_sdevice, const vk::raii::Device& device, Requirements requirements);
+    Buffer(const Device& device, Requirements requirements);
 
     Buffer(const Buffer&) = delete;
     Buffer& operator=(const Buffer&) = delete;
@@ -45,9 +48,7 @@ public:
     static void copy(Buffer& source, Buffer& destination, const vk::CommandBuffer& command_buffer, const vk::Queue& transfer_queue);
 
 private:
-    static uint32_t findMemoryType(const vk::PhysicalDevice& device, uint32_t required_type_bits, const vk::MemoryPropertyFlags& required_properties);
-    static vk::raii::Buffer createBuffer(const vk::raii::Device& device, Requirements requirements);
-    static vk::MemoryAllocateInfo memoryAllocationInfo(const vk::PhysicalDevice& device, const vk::MemoryRequirements& memory_reqs, Requirements buffer_reqs);
+    static vk::raii::Buffer createBuffer(const Device& device, Requirements requirements);
 
     vk::raii::Buffer buffer;
     vk::raii::DeviceMemory memory;
@@ -56,6 +57,7 @@ private:
     uint8_t* mapped_data = nullptr;
 };
 
+}  // namespace vulkan
 }  // namespace visualization
 
-#endif  // !define BB8_VISUALIZATION_BUFFER_HPP
+#endif  // !define BB8_VISUALIZATION_VULKAN_BUFFER_HPP

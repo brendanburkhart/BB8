@@ -1,14 +1,9 @@
-subdir('shaders')
+subdir('vulkan')
 
 visualization_src = files([
-    'buffer.cpp',
-    'frame_resources.cpp',
-    'swap_chain.cpp',
     'visualization.cpp',
-    'vulkan_application.cpp',
-    'window.cpp',
 ])
 
-visualization_src += shaders_src
+visualization_src += vulkan_src
 
-visualization_deps = [ shaders_dep ]
+visualization_deps = [ vulkan_deps ]

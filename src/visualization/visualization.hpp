@@ -3,8 +3,8 @@
 
 #include <string>
 
-#include "vulkan_application.hpp"
-#include "window.hpp"
+#include "vulkan/application.hpp"
+#include "vulkan/window.hpp"
 
 namespace visualization {
 
@@ -15,8 +15,8 @@ public:
     void run();
 
 private:
-    visualization::Window window;
-    visualization::VulkanApplication vulkan;
+    vulkan::Window window;
+    vulkan::Application vulkan;
 
     bool minimized;
 

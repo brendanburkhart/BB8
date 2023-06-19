@@ -1,12 +1,16 @@
-#ifndef BB8_VISUALIZATION_SWAP_CHAIN_HPP
-#define BB8_VISUALIZATION_SWAP_CHAIN_HPP
+#ifndef BB8_VISUALIZATION_VULKAN_SWAP_CHAIN_HPP
+#define BB8_VISUALIZATION_VULKAN_SWAP_CHAIN_HPP
 
 #include <limits>
 #include <tuple>
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
+#include "device.hpp"
+
 namespace visualization {
+namespace vulkan {
+
 class SwapChain {
 public:
     class Support {
@@ -15,15 +19,14 @@ public:
         std::vector<vk::SurfaceFormatKHR> formats;
         std::vector<vk::PresentModeKHR> present_modes;
 
-        static Support query(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface);
+        static Support query(const Device& device, const vk::SurfaceKHR& surface);
     };
 
-    SwapChain(const vk::PhysicalDevice& physical_device,
-              const vk::raii::Device& device,
+    SwapChain(const Device& device,
               const vk::SurfaceKHR& surface,
               const vk::Extent2D window_size);
 
-    void initializeFramebuffers(const vk::raii::Device& device, const vk::RenderPass& render_pass);
+    void initializeFramebuffers(const Device& device, const vk::RenderPass& render_pass);
 
     std::tuple<vk::Result, uint32_t> acquireNextImage(const vk::Semaphore& semaphore);
 
@@ -52,6 +55,7 @@ private:
     std::vector<vk::raii::Framebuffer> framebuffers;
 };
 
+}  // namespace vulkan
 }  // namespace visualization
 
-#endif  // !BB8_VISUALIZATION_SWAP_CHAIN_HPP
+#endif  // !BB8_VISUALIZATION_VULKAN_SWAP_CHAIN_HPP
