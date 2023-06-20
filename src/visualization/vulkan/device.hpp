@@ -15,7 +15,7 @@ public:
     using Layers = std::vector<std::string>;
     using Extensions = std::vector<std::string>;
 
-    Device(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface, Layers required_layers, Extensions required_extensions);
+    Device(const vk::raii::Instance& instance, const vk::SurfaceKHR& surface, Layers required_layers, Extensions required_extensions);
 
     void waitIdle();
 
@@ -26,6 +26,9 @@ public:
     const vk::Queue& queue() const;
     const vk::Queue& presentQueue() const;
 
+    const vk::PhysicalDeviceProperties properties() const;
+    const vk::PhysicalDeviceFeatures features() const;
+
 private:
     class QueueFamilies {
     public:
@@ -33,12 +36,19 @@ private:
         std::optional<uint32_t> present;
     };
 
-    static vk::raii::PhysicalDevice selectPhysicalDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface);
-    static QueueFamilies queryQueueFamilies(const vk::PhysicalDevice& device, const vk::raii::SurfaceKHR& surface);
-    static vk::raii::Device buildLogicalDevice(const vk::raii::PhysicalDevice& physical_device, const QueueFamilies& queue_families, const Layers required_layers, const Extensions required_extensions);
+    static QueueFamilies queryQueueFamilies(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface);
+    static bool supportsLayers(const vk::PhysicalDevice& device, const Layers layers);
+    static bool supportsExtensions(const vk::PhysicalDevice& device, const Extensions extensions);
+    static bool supportsSwapChain(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface);
+
+    static vk::raii::PhysicalDevice selectPhysicalDevice(const vk::raii::Instance& instance, const vk::SurfaceKHR& surface, const Layers required_layers, const Extensions required_extensions);
+    static vk::PhysicalDeviceFeatures selectFeatures(const vk::PhysicalDevice& physical_device);
+    static vk::raii::Device buildLogicalDevice(const vk::raii::PhysicalDevice& physical_device, const QueueFamilies& queue_families, vk::PhysicalDeviceFeatures features, const Layers required_layers, const Extensions required_extensions);
 
     const vk::raii::PhysicalDevice physical_device;
+
     const QueueFamilies queue_families;
+    const vk::PhysicalDeviceFeatures enabled_features;
     const vk::raii::Device logical_device;
 
     const vk::raii::Queue graphics_queue;

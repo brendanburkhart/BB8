@@ -6,12 +6,12 @@
 namespace visualization {
 namespace vulkan {
 
-SwapChain::Support SwapChain::Support::query(const Device& device, const vk::SurfaceKHR& surface) {
+SwapChain::Support SwapChain::Support::query(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface) {
     Support support;
 
-    support.capabilities = device.physical().getSurfaceCapabilitiesKHR(surface);
-    support.formats = device.physical().getSurfaceFormatsKHR(surface);
-    support.present_modes = device.physical().getSurfacePresentModesKHR(surface);
+    support.capabilities = device.getSurfaceCapabilitiesKHR(surface);
+    support.formats = device.getSurfaceFormatsKHR(surface);
+    support.present_modes = device.getSurfacePresentModesKHR(surface);
 
     return support;
 }
@@ -21,7 +21,7 @@ SwapChain::SwapChain(
     const vk::SurfaceKHR& surface,
     const vk::Extent2D window_size)
     : swap_chain(nullptr) {
-    auto support = Support::query(device, surface);
+    auto support = Support::query(device.physical(), surface);
     auto surface_format = chooseSurfaceFormat(support.formats);
     extent = chooseExtent(support.capabilities, window_size);
     format = surface_format.format;

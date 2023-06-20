@@ -27,7 +27,7 @@ Application::Application(std::string name, Window* window)
     : window(window),
       instance(buildInstance(context, window, name, VK_MAKE_VERSION(0, 0, 1))),
       surface(window->createSurface(instance)),
-      device(instance, surface, validation_layers, device_extensions),
+      device(instance, *surface, validation_layers, device_extensions),
       descriptor_set_layout(buildDescriptorLayout(device)),
       pipeline_layout(nullptr),
       render_pass(nullptr),
@@ -35,10 +35,11 @@ Application::Application(std::string name, Window* window)
       command_pool(device.createPool(false)),
       transient_pool(device.createPool(true)),
       descriptor_pool(createDescriptorPool(device)),
+      texture_image(createTexture(device, *transient_pool)),
       vertex_buffer(buildVertexBuffer()),
       index_buffer(buildIndexBuffer()),
-      frames({FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout),
-              FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout)}),
+      frames({FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout, texture_image),
+              FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout, texture_image)}),
       swap_chain(device, *surface, window->size()) {
     render_pass = buildRenderPass(device, swap_chain.getFormat());
     swap_chain.initializeFramebuffers(device, *render_pass);
@@ -58,7 +59,10 @@ void Application::onResize() {
 }
 
 vk::raii::DescriptorSetLayout Application::buildDescriptorLayout(const Device& device) {
-    auto layout_bindings = shaders::UniformBufferObject::layoutBinding();
+    auto ubo_layout_binding = shaders::UniformBufferObject::layoutBinding();
+    auto texture_sampler_layout_binding = vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment);
+    std::vector<vk::DescriptorSetLayoutBinding> layout_bindings = {ubo_layout_binding, texture_sampler_layout_binding};
+
     auto descriptor_layout_create_info = vk::DescriptorSetLayoutCreateInfo({}, layout_bindings);
     return vk::raii::DescriptorSetLayout(device.logical(), descriptor_layout_create_info);
 }
@@ -79,7 +83,7 @@ vk::raii::Instance Application::buildInstance(const vk::raii::Context& context, 
     return instance;
 }
 
-Device Application::buildDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface) {
+Device Application::buildDevice(const vk::raii::Instance& instance, const vk::SurfaceKHR& surface) {
     auto required_layers = enable_validation_layers ? validation_layers : std::vector<std::string>();
 
     return Device(instance, surface, required_layers, device_extensions);
@@ -121,10 +125,20 @@ vk::raii::RenderPass Application::buildRenderPass(const Device& device, vk::Form
 }
 
 vk::raii::DescriptorPool Application::createDescriptorPool(const Device& device) {
-    auto pool_size = vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, max_frames_in_flight);
-    auto create_info = vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, max_frames_in_flight, pool_size);
+    auto ubo_size = vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, max_frames_in_flight);
+    auto sampler_size = vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, max_frames_in_flight);
+    auto pool_sizes = std::vector<vk::DescriptorPoolSize>{ubo_size, sampler_size};
+    auto create_info = vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, max_frames_in_flight, pool_sizes);
 
     return vk::raii::DescriptorPool(device.logical(), create_info);
+}
+
+Image Application::createTexture(const Device& device, const vk::CommandPool& pool) {
+    auto allocate_info = vk::CommandBufferAllocateInfo(pool, vk::CommandBufferLevel::ePrimary, 1);
+    auto command_buffers = vk::raii::CommandBuffers(device.logical(), allocate_info);
+
+    auto file = std::filesystem::path("resources/textures/statue.jpg");
+    return Image::load(device, file, Image::Parameters::texture(), *command_buffers.front(), device.queue());
 }
 
 Buffer Application::buildVertexBuffer() {
@@ -262,7 +276,7 @@ void Application::recordCommandBuffer(vk::CommandBuffer command_buffer, const vk
     command_buffer.bindVertexBuffers(0, vertex_buffer.get(), vk::DeviceSize(0));
     command_buffer.bindIndexBuffer(index_buffer.get(), vk::DeviceSize(0), vk::IndexType::eUint16);
 
-    command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipeline_layout, 0, frames[frame_index].getDescriptor(), {});
+    command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipeline_layout, 0, frames[frame_index].getDescriptors(), {});
 
     auto viewport = vk::Viewport(0.0, 0.0, swap_chain.getExtent().width, swap_chain.getExtent().height, 0.0, 1.0);
     command_buffer.setViewport(0, viewport);

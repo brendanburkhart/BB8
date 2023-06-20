@@ -5,15 +5,17 @@
 #include <unordered_set>
 #include <vector>
 
+#include "swap_chain.hpp"
 #include "utilities.hpp"
 
 namespace visualization {
 namespace vulkan {
 
-Device::Device(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface, Layers layers, Extensions extensions)
-    : physical_device(selectPhysicalDevice(instance, surface)),
+Device::Device(const vk::raii::Instance& instance, const vk::SurfaceKHR& surface, Layers layers, Extensions extensions)
+    : physical_device(selectPhysicalDevice(instance, surface, layers, extensions)),
       queue_families(queryQueueFamilies(*physical_device, surface)),
-      logical_device(buildLogicalDevice(physical_device, queue_families, layers, extensions)),
+      enabled_features(selectFeatures(*physical_device)),
+      logical_device(buildLogicalDevice(physical_device, queue_families, enabled_features, layers, extensions)),
       graphics_queue(logical_device.getQueue(queue_families.graphics.value(), 0)),
       present_queue(logical_device.getQueue(queue_families.present.value(), 0)) {}
 
@@ -43,35 +45,15 @@ const vk::Queue& Device::presentQueue() const {
     return *present_queue;
 }
 
-vk::raii::PhysicalDevice Device::selectPhysicalDevice(const vk::raii::Instance& instance, const vk::raii::SurfaceKHR& surface) {
-    vk::raii::PhysicalDevices devices(instance);
-
-    if (devices.size() == 0) {
-        throw std::runtime_error("no Vulkan devices available");
-    }
-
-    std::vector<int> device_scores;
-    for (auto&& device : devices) {
-        auto queue_families = queryQueueFamilies(*device, surface);
-        if (!queue_families.graphics.has_value() || !queue_families.present.has_value()) {
-            device_scores.push_back(0);
-        } else if (queue_families.graphics != queue_families.present) {
-            device_scores.push_back(1);
-        } else {
-            device_scores.push_back(2);
-        }
-    }
-
-    auto max_score = std::max_element(std::begin(device_scores), std::end(device_scores));
-    if (*max_score == 0) {
-        throw std::runtime_error("no viable Vulkan devices are available");
-    }
-
-    auto device_index = std::distance(std::begin(device_scores), max_score);
-    return devices.at(device_index);
+const vk::PhysicalDeviceProperties Device::properties() const {
+    return physical_device.getProperties();
 }
 
-Device::QueueFamilies Device::queryQueueFamilies(const vk::PhysicalDevice& device, const vk::raii::SurfaceKHR& surface) {
+const vk::PhysicalDeviceFeatures Device::features() const {
+    return enabled_features;
+}
+
+Device::QueueFamilies Device::queryQueueFamilies(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface) {
     auto available_queue_families = device.getQueueFamilyProperties();
 
     std::unordered_set<uint32_t> graphics_families;
@@ -82,7 +64,7 @@ Device::QueueFamilies Device::queryQueueFamilies(const vk::PhysicalDevice& devic
             graphics_families.insert(index);
         }
 
-        vk::Bool32 present_support = device.getSurfaceSupportKHR(index, *surface);
+        vk::Bool32 present_support = device.getSurfaceSupportKHR(index, surface);
         if (present_support) {
             present_families.insert(index);
         }
@@ -106,7 +88,89 @@ Device::QueueFamilies Device::queryQueueFamilies(const vk::PhysicalDevice& devic
     return families;
 }
 
-vk::raii::Device Device::buildLogicalDevice(const vk::raii::PhysicalDevice& physical_device, const QueueFamilies& queue_families, const Layers required_layers, const Extensions required_extensions) {
+bool Device::supportsLayers(const vk::PhysicalDevice& device, const Layers layers) {
+    try {
+        gatherLayers(device.enumerateDeviceLayerProperties(), layers);
+    } catch (std::runtime_error&) {
+        return false;
+    }
+
+    return true;
+}
+
+bool Device::supportsExtensions(const vk::PhysicalDevice& device, const Extensions extensions) {
+    try {
+        gatherExtensions(device.enumerateDeviceExtensionProperties(), extensions);
+    } catch (std::runtime_error&) {
+        return false;
+    }
+
+    return true;
+}
+
+bool Device::supportsSwapChain(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface) {
+    auto support = SwapChain::Support::query(device, surface);
+    return !support.formats.empty() && !support.present_modes.empty();
+}
+
+vk::raii::PhysicalDevice Device::selectPhysicalDevice(const vk::raii::Instance& instance, const vk::SurfaceKHR& surface, const Layers required_layers, const Extensions required_extensions) {
+    vk::raii::PhysicalDevices devices(instance);
+
+    if (devices.size() == 0) {
+        throw std::runtime_error("no Vulkan devices available");
+    }
+
+    std::vector<int> device_scores;
+    for (auto&& device : devices) {
+        bool layer_support = supportsLayers(*device, required_layers);
+        bool extension_support = supportsExtensions(*device, required_extensions);
+
+        if (!layer_support || !extension_support) {
+            device_scores.push_back(0);
+            continue;
+        }
+
+        if (!supportsSwapChain(*device, surface)) {
+            device_scores.push_back(0);
+            continue;
+        }
+
+        auto queue_families = queryQueueFamilies(*device, surface);
+        if (!queue_families.graphics.has_value() || !queue_families.present.has_value()) {
+            device_scores.push_back(0);
+            continue;
+        }
+
+        int score = 1;
+        auto supports_anisotropy = device.getFeatures().samplerAnisotropy;
+        if (supports_anisotropy) {
+            score += 1;
+        }
+
+        if (queue_families.graphics == queue_families.present) {
+            score += 2;
+        }
+
+        device_scores.push_back(score);
+    }
+
+    auto max_score = std::max_element(std::begin(device_scores), std::end(device_scores));
+    if (*max_score == 0) {
+        throw std::runtime_error("no viable Vulkan devices are available");
+    }
+
+    auto device_index = std::distance(std::begin(device_scores), max_score);
+    return devices.at(device_index);
+}
+
+vk::PhysicalDeviceFeatures Device::selectFeatures(const vk::PhysicalDevice& physical_device) {
+    auto supports_anisotropy = physical_device.getFeatures().samplerAnisotropy;
+    auto features = vk::PhysicalDeviceFeatures();
+    features.samplerAnisotropy = supports_anisotropy;
+    return features;
+}
+
+vk::raii::Device Device::buildLogicalDevice(const vk::raii::PhysicalDevice& physical_device, const QueueFamilies& queue_families, vk::PhysicalDeviceFeatures features, const Layers required_layers, const Extensions required_extensions) {
     constexpr float queue_priority = 0.0f;
 
     std::vector<vk::DeviceQueueCreateInfo> queue_create_infos;
@@ -119,7 +183,7 @@ vk::raii::Device Device::buildLogicalDevice(const vk::raii::PhysicalDevice& phys
     auto enabled_layers = gatherLayers(physical_device.enumerateDeviceLayerProperties(), required_layers);
     auto enabled_extensions = gatherExtensions(physical_device.enumerateDeviceExtensionProperties(), required_extensions);
 
-    auto device_create_info = vk::DeviceCreateInfo(vk::DeviceCreateFlags(), queue_create_infos, enabled_layers, enabled_extensions, nullptr);
+    auto device_create_info = vk::DeviceCreateInfo(vk::DeviceCreateFlags(), queue_create_infos, enabled_layers, enabled_extensions, &features);
     return vk::raii::Device(physical_device, device_create_info);
 }
 

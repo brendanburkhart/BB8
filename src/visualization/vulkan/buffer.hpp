@@ -42,8 +42,11 @@ public:
 
     void fill(void* data, size_t size);
 
+    size_t getSize() const;
     uint8_t* data() const;
-    vk::Buffer get();
+    vk::Buffer get() const;
+
+    vk::DescriptorBufferInfo descriptorInfo() const;
 
     static void copy(Buffer& source, Buffer& destination, const vk::CommandBuffer& command_buffer, const vk::Queue& transfer_queue);
 

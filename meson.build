@@ -3,7 +3,7 @@ project(
     'cpp',
     version : '0.0.1',
     default_options: [
-        'cpp_std=c++20',
+        'cpp_std=c++17',
         'werror=true',
         'warning_level=3',
     ]
@@ -21,5 +21,6 @@ dl_dep = cpp_compiler.find_library('dl', required: false)
 vulkan_dep = dependency('vulkan')
 glm_dep = dependency('glm')
 glfw_dep = dependency('glfw3')
+stb_image_dep = dependency('stb_image')
 
 subdir('src')

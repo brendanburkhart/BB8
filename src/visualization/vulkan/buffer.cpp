@@ -64,13 +64,21 @@ void Buffer::fill(void* data, size_t size) {
     mapped_data = nullptr;
 }
 
+size_t Buffer::getSize() const {
+    return size;
+}
+
 uint8_t* Buffer::data() const {
     assert(mapped_data != nullptr);
     return mapped_data;
 }
 
-vk::Buffer Buffer::get() {
+vk::Buffer Buffer::get() const {
     return *buffer;
+}
+
+vk::DescriptorBufferInfo Buffer::descriptorInfo() const {
+    return vk::DescriptorBufferInfo(*buffer, 0, size);
 }
 
 void Buffer::copy(Buffer& source, Buffer& destination, const vk::CommandBuffer& command_buffer, const vk::Queue& transfer_queue) {

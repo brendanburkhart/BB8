@@ -12,11 +12,12 @@ class Vertex {
 public:
     glm::vec2 position;
     glm::vec3 color;
+    glm::vec2 texture_coordinate;
 
-    Vertex(glm::vec2 position, glm::vec3 color);
+    Vertex(glm::vec2 position, glm::vec3 color, glm::vec2 texture_coordinate);
 
     static vk::VertexInputBindingDescription getBindingDescription();
-    static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions();
+    static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions();
 };
 
 }  // namespace shaders

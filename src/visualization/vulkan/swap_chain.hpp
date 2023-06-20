@@ -19,7 +19,7 @@ public:
         std::vector<vk::SurfaceFormatKHR> formats;
         std::vector<vk::PresentModeKHR> present_modes;
 
-        static Support query(const Device& device, const vk::SurfaceKHR& surface);
+        static Support query(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface);
     };
 
     SwapChain(const Device& device,
