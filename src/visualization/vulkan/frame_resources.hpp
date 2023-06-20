@@ -6,9 +6,9 @@
 
 #include "buffer.hpp"
 #include "device.hpp"
-#include "image.hpp"
 #include "shaders/uniform_buffer_object.hpp"
 #include "swap_chain.hpp"
+#include "texture.hpp"
 
 namespace visualization {
 namespace vulkan {
@@ -19,7 +19,7 @@ public:
                    const vk::CommandPool& command_pool,
                    const vk::DescriptorPool& descriptor_pool,
                    const vk::DescriptorSetLayout& layout,
-                   const Image& texture);
+                   const Texture& texture);
 
     const vk::CommandBuffer& getCommandBuffer() const;
 
@@ -40,7 +40,7 @@ private:
                                                      const vk::DescriptorPool& pool,
                                                      const vk::DescriptorSetLayout& layout,
                                                      const Buffer& ubo_buffer,
-                                                     const Image& texture);
+                                                     const Texture& texture);
 
     static constexpr uint64_t timeout = std::numeric_limits<uint64_t>::max();
 

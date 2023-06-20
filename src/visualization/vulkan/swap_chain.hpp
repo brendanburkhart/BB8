@@ -7,6 +7,7 @@
 #include <vulkan/vulkan_raii.hpp>
 
 #include "device.hpp"
+#include "depth_buffer.hpp"
 
 namespace visualization {
 namespace vulkan {
@@ -26,7 +27,7 @@ public:
               const vk::SurfaceKHR& surface,
               const vk::Extent2D window_size);
 
-    void initializeFramebuffers(const Device& device, const vk::RenderPass& render_pass);
+    void initializeFramebuffers(const Device& device, const vk::RenderPass& render_pass, const DepthBuffer& depth_buffer);
 
     std::tuple<vk::Result, uint32_t> acquireNextImage(const vk::Semaphore& semaphore);
 

@@ -6,10 +6,11 @@
 #include "buffer.hpp"
 #include "device.hpp"
 #include "frame_resources.hpp"
-#include "image.hpp"
 #include "shaders/vertex.hpp"
 #include "swap_chain.hpp"
+#include "texture.hpp"
 #include "utilities.hpp"
+#include "depth_buffer.hpp"
 #include "window.hpp"
 
 namespace visualization {
@@ -34,15 +35,15 @@ private:
     static vk::raii::DescriptorSetLayout buildDescriptorLayout(const Device& device);
     static vk::raii::Instance buildInstance(const vk::raii::Context& context, Window* window, std::string app_name, uint32_t app_version);
     static Device buildDevice(const vk::raii::Instance& instance, const vk::SurfaceKHR& surface);
-    static vk::raii::RenderPass buildRenderPass(const Device& device, vk::Format color_format);
 
     static vk::raii::DescriptorPool createDescriptorPool(const Device& device);
 
-    static Image createTexture(const Device& device, const vk::CommandPool& pool);
+    static Texture createTexture(const Device& device, const vk::CommandPool& pool);
 
     Buffer buildVertexBuffer();
     Buffer buildIndexBuffer();
 
+    void buildRenderPass();
     void buildSwapChain();
     void buildGraphicsPipeline();
 
@@ -81,14 +82,25 @@ private:
 
     vk::raii::DescriptorPool descriptor_pool;
 
-    Image texture_image;
+    Texture texture_image;
+    DepthBuffer depth_buffer;
 
-    const std::array<shaders::Vertex, 4> vertex_data = {
-        shaders::Vertex({-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}),
-        shaders::Vertex({0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}),
-        shaders::Vertex({0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}),
-        shaders::Vertex({-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f})};
-    const std::vector<uint16_t> vertex_indices = {0, 1, 2, 2, 3, 0};
+    const std::array<shaders::Vertex, 8> vertex_data = {
+        // sqaure one
+        shaders::Vertex({-0.5f, -0.5f, 0.0}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}),
+        shaders::Vertex({0.5f, -0.5f, 0.0}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}),
+        shaders::Vertex({0.5f, 0.5f, 0.0}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}),
+        shaders::Vertex({-0.5f, 0.5f, 0.0}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}),
+        // square two
+        shaders::Vertex({-0.5f, -0.5f, -0.5}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}),
+        shaders::Vertex({0.5f, -0.5f, -0.5}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}),
+        shaders::Vertex({0.5f, 0.5f, -0.5}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}),
+        shaders::Vertex({-0.5f, 0.5f, -0.5}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f})};
+    const std::vector<uint16_t> vertex_indices = {
+        0, 1, 2, 2, 3, 0,  // square one
+        4, 5, 6, 6, 7, 4   // square two
+    };
+
     Buffer vertex_buffer;
     Buffer index_buffer;
 

@@ -54,11 +54,12 @@ SwapChain::SwapChain(
     }
 }
 
-void SwapChain::initializeFramebuffers(const Device& device, const vk::RenderPass& render_pass) {
+void SwapChain::initializeFramebuffers(const Device& device, const vk::RenderPass& render_pass, const DepthBuffer& depth_buffer) {
     framebuffers.clear();
 
     for (auto& image_view : image_views) {
-        auto framebuffer_create_info = vk::FramebufferCreateInfo({}, render_pass, *image_view, extent.width, extent.height, 1);
+        auto attachments = std::vector<vk::ImageView>{*image_view, depth_buffer.getView()};
+        auto framebuffer_create_info = vk::FramebufferCreateInfo({}, render_pass, attachments, extent.width, extent.height, 1);
         framebuffers.emplace_back(device.logical(), framebuffer_create_info);
     }
 }

@@ -29,6 +29,8 @@ public:
     const vk::PhysicalDeviceProperties properties() const;
     const vk::PhysicalDeviceFeatures features() const;
 
+    bool supportsFormatUsage(vk::Format format, vk::ImageTiling tiling, vk::FormatFeatureFlags usage) const;
+
 private:
     class QueueFamilies {
     public:

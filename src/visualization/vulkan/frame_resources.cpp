@@ -9,7 +9,7 @@ FrameResources::FrameResources(const Device& device,
                                const vk::CommandPool& command_pool,
                                const vk::DescriptorPool& descriptor_pool,
                                const vk::DescriptorSetLayout& layout,
-                               const Image& texture)
+                               const Texture& texture)
     : command_buffer(createCommandBuffer(device, command_pool)),
       ubo_buffer(Buffer(device, Buffer::Requirements::uniform(sizeof(shaders::UniformBufferObject)))),
       descriptor_set(createDescriptors(device, descriptor_pool, layout, ubo_buffer, texture)),
@@ -21,7 +21,7 @@ vk::raii::DescriptorSet FrameResources::createDescriptors(const Device& device,
                                                           const vk::DescriptorPool& pool,
                                                           const vk::DescriptorSetLayout& layout,
                                                           const Buffer& ubo_buffer,
-                                                          const Image& texture) {
+                                                          const Texture& texture) {
     auto allocate_info = vk::DescriptorSetAllocateInfo(pool, layout);
     auto descriptor_sets = vk::raii::DescriptorSets(device.logical(), allocate_info);
     vk::raii::DescriptorSet descriptor = std::move(descriptor_sets.at(0));

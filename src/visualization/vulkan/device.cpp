@@ -53,6 +53,18 @@ const vk::PhysicalDeviceFeatures Device::features() const {
     return enabled_features;
 }
 
+bool Device::supportsFormatUsage(vk::Format format, vk::ImageTiling tiling, vk::FormatFeatureFlags usage) const {
+    auto properties = physical_device.getFormatProperties(format);
+
+    if (tiling == vk::ImageTiling::eLinear) {
+        return (properties.linearTilingFeatures & usage) == usage;
+    } else if (tiling == vk::ImageTiling::eOptimal) {
+        return (properties.optimalTilingFeatures & usage) == usage;
+    } else {
+        throw std::runtime_error("suppotsFormatUsage: unknown tiling mode");
+    }
+}
+
 Device::QueueFamilies Device::queryQueueFamilies(const vk::PhysicalDevice& device, const vk::SurfaceKHR& surface) {
     auto available_queue_families = device.getQueueFamilyProperties();
 

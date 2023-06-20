@@ -9,7 +9,9 @@ namespace vulkan {
 Image::Parameters::Parameters(vk::MemoryPropertyFlags memory_properties,
                               vk::ImageUsageFlags usage,
                               vk::ImageTiling tiling,
-                              vk::Format format) : memory_properties(memory_properties), usage(usage), tiling(tiling), format(format) {}
+                              vk::Format format,
+                              vk::ImageAspectFlags aspects)
+    : memory_properties(memory_properties), usage(usage), tiling(tiling), format(format), aspects(aspects) {}
 
 Image::Parameters Image::Parameters::texture() {
     auto usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
@@ -45,21 +47,29 @@ Image Image::load(const Device& device,
     return image;
 }
 
-vk::DescriptorImageInfo Image::descriptorInfo() const {
-    return vk::DescriptorImageInfo(*sampler, *view, layout);
+const vk::ImageView Image::getView() const {
+    return *view;
+}
+
+vk::ImageLayout Image::getLayout() const {
+    return layout;
+}
+
+vk::Format Image::getFormat() const {
+    return format;
 }
 
 Image::Image(const Device& device, uint32_t width, uint32_t height, Parameters parameters)
     : extent(width, height, 1),
       layout(vk::ImageLayout::eUndefined),
       format(parameters.format),
+      aspects(parameters.aspects),
       image(createImage(device, extent, parameters)),
       memory(allocateMemory(device, image.getMemoryRequirements(), parameters.memory_properties)),
-      view(nullptr),
-      sampler(createSampler(device)) {
+      view(nullptr) {
     image.bindMemory(*memory, 0);
     // can't create image view until image memory is bound
-    view = createView(device, *image, format);
+    view = createView(device, *image, format, aspects);
 }
 
 vk::raii::Image Image::createImage(const Device& device, vk::Extent3D extent, Parameters parameters) {
@@ -86,37 +96,11 @@ vk::raii::DeviceMemory Image::allocateMemory(const Device& device, vk::MemoryReq
     return vk::raii::DeviceMemory(device.logical(), memory_allocation);
 }
 
-vk::raii::ImageView Image::createView(const Device& device, const vk::Image& image, vk::Format format) {
-    auto subresource = vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
+vk::raii::ImageView Image::createView(const Device& device, const vk::Image& image, vk::Format format, vk::ImageAspectFlags aspects) {
+    auto subresource = vk::ImageSubresourceRange(aspects, 0, 1, 0, 1);
     auto view_info = vk::ImageViewCreateInfo({}, image, vk::ImageViewType::e2D, format, {}, subresource);
 
     return vk::raii::ImageView(device.logical(), view_info);
-}
-
-vk::raii::Sampler Image::createSampler(const Device& device) {
-    bool enable_anisotropy = device.features().samplerAnisotropy;
-    auto max_anisotropy = device.properties().limits.maxSamplerAnisotropy;
-
-    auto sampler_info = vk::SamplerCreateInfo(
-        {},                                // flags
-        vk::Filter::eLinear,               // mag(nification) filter
-        vk::Filter::eLinear,               // min(imization) filter
-        vk::SamplerMipmapMode::eLinear,    // mipmap mode
-        vk::SamplerAddressMode::eRepeat,   // U address mode
-        vk::SamplerAddressMode::eRepeat,   // V address mode
-        vk::SamplerAddressMode::eRepeat,   // W address mode
-        0.0,                               // mipmap LOD (level-of-detail) bias
-        enable_anisotropy,                 // enable anisotropy
-        max_anisotropy,                    // max anisotropy
-        false,                             // enable compare
-        vk::CompareOp::eAlways,            // compare op
-        0.0,                               // min LOD
-        0.0,                               // max LOD
-        vk::BorderColor::eIntOpaqueBlack,  // border color for clamp-to-border address mode
-        false                              // unnormalized coordinates
-    );
-
-    return vk::raii::Sampler(device.logical(), sampler_info);
 }
 
 void Image::transitionLayout(const vk::CommandBuffer& command_buffer, vk::Format format, vk::ImageLayout new_layout) {

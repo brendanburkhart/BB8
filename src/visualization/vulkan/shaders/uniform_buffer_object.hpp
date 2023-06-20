@@ -1,7 +1,7 @@
 #ifndef BB8_VISUALIZATION_SHADERS_UNIFORM_BUFFER_OBJECT_HPP
 #define BB8_VISUALIZATION_SHADERS_UNIFORM_BUFFER_OBJECT_HPP
 
-#include <glm/glm.hpp>
+#include "../glm.hpp"
 #include <vulkan/vulkan_raii.hpp>
 
 namespace visualization {

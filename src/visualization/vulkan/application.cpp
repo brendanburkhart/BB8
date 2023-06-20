@@ -9,10 +9,7 @@
 #include <sstream>
 #include <stdexcept>
 
-#define GLM_FORCE_RADIANS
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
+#include "glm.hpp"
 #include "shaders.hpp"
 #include "shaders/uniform_buffer_object.hpp"
 #include "shaders/vertex.hpp"
@@ -36,13 +33,14 @@ Application::Application(std::string name, Window* window)
       transient_pool(device.createPool(true)),
       descriptor_pool(createDescriptorPool(device)),
       texture_image(createTexture(device, *transient_pool)),
+      depth_buffer(device, 1, 1),
       vertex_buffer(buildVertexBuffer()),
       index_buffer(buildIndexBuffer()),
       frames({FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout, texture_image),
               FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout, texture_image)}),
       swap_chain(device, *surface, window->size()) {
-    render_pass = buildRenderPass(device, swap_chain.getFormat());
-    swap_chain.initializeFramebuffers(device, *render_pass);
+    buildRenderPass();
+    buildSwapChain();
     buildGraphicsPipeline();
 }
 
@@ -93,13 +91,14 @@ void Application::buildSwapChain() {
     device.waitIdle();
 
     swap_chain = SwapChain(device, *surface, window->size());
-    swap_chain.initializeFramebuffers(device, *render_pass);
+    depth_buffer = DepthBuffer(device, swap_chain.getExtent().width, swap_chain.getExtent().height);
+    swap_chain.initializeFramebuffers(device, *render_pass, depth_buffer);
 }
 
-vk::raii::RenderPass Application::buildRenderPass(const Device& device, vk::Format color_format) {
+void Application::buildRenderPass() {
     auto color_attachment = vk::AttachmentDescription(
         {},
-        color_format,
+        swap_chain.getFormat(),
         vk::SampleCountFlagBits::e1,
         vk::AttachmentLoadOp::eClear,
         vk::AttachmentStoreOp::eStore,
@@ -108,20 +107,35 @@ vk::raii::RenderPass Application::buildRenderPass(const Device& device, vk::Form
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::ePresentSrcKHR);
 
+    auto depth_attachment = vk::AttachmentDescription(
+        {},
+        depth_buffer.getFormat(),
+        vk::SampleCountFlagBits::e1,
+        vk::AttachmentLoadOp::eClear,
+        vk::AttachmentStoreOp::eDontCare,
+        vk::AttachmentLoadOp::eDontCare,
+        vk::AttachmentStoreOp::eDontCare,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eDepthStencilAttachmentOptimal);
+
     auto color_reference = vk::AttachmentReference(0, vk::ImageLayout::eColorAttachmentOptimal);
-    auto subpass = vk::SubpassDescription({}, vk::PipelineBindPoint::eGraphics, {}, color_reference, {}, {}, {});
+    auto depth_reference = vk::AttachmentReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+
+    auto subpass = vk::SubpassDescription({}, vk::PipelineBindPoint::eGraphics, {}, color_reference, {}, &depth_reference, {});
 
     auto subpass_dependency = vk::SubpassDependency(
         VK_SUBPASS_EXTERNAL,
         0u,
-        vk::PipelineStageFlagBits::eColorAttachmentOutput,
-        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests,
         {},
-        vk::AccessFlagBits::eColorAttachmentWrite,
+        vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite,
         {});
 
-    auto render_pass_create_info = vk::RenderPassCreateInfo({}, color_attachment, subpass, subpass_dependency, nullptr);
-    return vk::raii::RenderPass(device.logical(), render_pass_create_info, nullptr);
+    auto attachments = std::vector<vk::AttachmentDescription>{color_attachment, depth_attachment};
+    auto render_pass_create_info = vk::RenderPassCreateInfo({}, attachments, subpass, subpass_dependency, nullptr);
+
+    render_pass = vk::raii::RenderPass(device.logical(), render_pass_create_info, nullptr);
 }
 
 vk::raii::DescriptorPool Application::createDescriptorPool(const Device& device) {
@@ -133,12 +147,12 @@ vk::raii::DescriptorPool Application::createDescriptorPool(const Device& device)
     return vk::raii::DescriptorPool(device.logical(), create_info);
 }
 
-Image Application::createTexture(const Device& device, const vk::CommandPool& pool) {
+Texture Application::createTexture(const Device& device, const vk::CommandPool& pool) {
     auto allocate_info = vk::CommandBufferAllocateInfo(pool, vk::CommandBufferLevel::ePrimary, 1);
     auto command_buffers = vk::raii::CommandBuffers(device.logical(), allocate_info);
 
     auto file = std::filesystem::path("resources/textures/statue.jpg");
-    return Image::load(device, file, Image::Parameters::texture(), *command_buffers.front(), device.queue());
+    return Texture::load(device, file, vk::SamplerAddressMode::eRepeat, *command_buffers.front(), device.queue());
 }
 
 Buffer Application::buildVertexBuffer() {
@@ -230,20 +244,34 @@ void Application::buildGraphicsPipeline() {
     auto layout_create_info = vk::PipelineLayoutCreateInfo({}, *descriptor_set_layout, {});
     pipeline_layout = vk::raii::PipelineLayout(device.logical(), layout_create_info);
 
+    auto depth_stencil = vk::PipelineDepthStencilStateCreateInfo(
+        {},                    // flags
+        true,                  // depth test enable
+        true,                  // depth write enable
+        vk::CompareOp::eLess,  // depth compare op
+        false,                 // bounds test enable
+        false,                 // stencil test enable
+        {},                    // front
+        {},                    // bacl
+        0.0,                   // min depth bound
+        1.0                    // max depth bound
+    );
+
     auto pipeline_create_info = vk::GraphicsPipelineCreateInfo(
-        {},
-        shader_stages,
-        &vertex_input,
-        &input_assembly,
-        nullptr,
-        &viewport_create_info,
-        &rasterizer,
-        &multisample,
-        nullptr,
-        &color_blend,
-        &dynamic_states_create_info,
-        *pipeline_layout,
-        *render_pass);
+        {},                           // flags
+        shader_stages,                // stages
+        &vertex_input,                // vertex input state
+        &input_assembly,              // input assembly state
+        nullptr,                      // tessellation state
+        &viewport_create_info,        // viewport state
+        &rasterizer,                  // rasterization state
+        &multisample,                 // multisample state
+        &depth_stencil,                      // depth stencil state
+        &color_blend,                 // color blend state
+        &dynamic_states_create_info,  // dynamic state
+        *pipeline_layout,             // layout
+        *render_pass                  // render pass
+    );
 
     pipeline = vk::raii::Pipeline(device.logical(), nullptr, pipeline_create_info);
 }
@@ -268,8 +296,10 @@ void Application::recordCommandBuffer(vk::CommandBuffer command_buffer, const vk
     command_buffer.begin(buffer_begin_info);
 
     auto clear_color = vk::ClearValue(vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
+    auto clear_depth = vk::ClearValue(vk::ClearDepthStencilValue(1.0, 0));
+    auto clear_values = std::vector<vk::ClearValue>{clear_color, clear_depth};
     auto render_area = vk::Rect2D({0, 0}, swap_chain.getExtent());
-    auto render_pass_info = vk::RenderPassBeginInfo(*render_pass, framebuffer, render_area, clear_color);
+    auto render_pass_info = vk::RenderPassBeginInfo(*render_pass, framebuffer, render_area, clear_values);
     command_buffer.beginRenderPass(render_pass_info, vk::SubpassContents::eInline);
 
     command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline);
