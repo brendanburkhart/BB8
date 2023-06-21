@@ -40,6 +40,8 @@ public:
 
     ~Buffer();
 
+    static Buffer load(const Device& device, void* data, Requirements requirements);
+
     void fill(void* data, size_t size);
 
     size_t getSize() const;
@@ -48,14 +50,14 @@ public:
 
     vk::DescriptorBufferInfo descriptorInfo() const;
 
-    static void copy(Buffer& source, Buffer& destination, const vk::CommandBuffer& command_buffer, const vk::Queue& transfer_queue);
+    static void copy(Buffer& source, Buffer& destination, const vk::CommandBuffer& command_buffer);
 
 private:
     static vk::raii::Buffer createBuffer(const Device& device, Requirements requirements);
 
     vk::raii::Buffer buffer;
     vk::raii::DeviceMemory memory;
-    const size_t size;
+    size_t size;
 
     uint8_t* mapped_data = nullptr;
 };

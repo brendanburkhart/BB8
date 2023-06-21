@@ -56,6 +56,30 @@ Buffer::~Buffer() {
     }
 }
 
+Buffer Buffer::load(const Device& device, void* data, Requirements requirements) {
+    auto allocate_info = vk::CommandBufferAllocateInfo(device.transientPool(), vk::CommandBufferLevel::ePrimary, 1);
+    auto command_buffers = vk::raii::CommandBuffers(device.logical(), allocate_info);
+    auto command_buffer = std::move(command_buffers.front());
+
+    auto begin_info = vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    command_buffer.begin(begin_info);
+
+    Buffer staging = Buffer(device, Buffer::Requirements::staging(requirements.size));
+    staging.fill((void*)data, requirements.size);
+
+    Buffer primary = Buffer(device, requirements);
+
+    Buffer::copy(staging, primary, *command_buffer);
+
+    command_buffer.end();
+
+    auto submit_info = vk::SubmitInfo({}, {}, *command_buffer, {});
+    device.transferQueue().submit(submit_info);
+    device.transferQueue().waitIdle();
+
+    return primary;
+}
+
 void Buffer::fill(void* data, size_t size) {
     assert(size == this->size);
     mapped_data = static_cast<uint8_t*>(memory.mapMemory(0, size));
@@ -81,22 +105,13 @@ vk::DescriptorBufferInfo Buffer::descriptorInfo() const {
     return vk::DescriptorBufferInfo(*buffer, 0, size);
 }
 
-void Buffer::copy(Buffer& source, Buffer& destination, const vk::CommandBuffer& command_buffer, const vk::Queue& transfer_queue) {
+void Buffer::copy(Buffer& source, Buffer& destination, const vk::CommandBuffer& command_buffer) {
     if (source.size != destination.size) {
         throw std::runtime_error("souce and destination buffer sizes do not match");
     }
 
-    auto begin_info = vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    command_buffer.begin(begin_info);
-
     auto copy_region = vk::BufferCopy(0, 0, source.size);
     command_buffer.copyBuffer(*source.buffer, *destination.buffer, copy_region);
-
-    command_buffer.end();
-
-    auto submit_info = vk::SubmitInfo({}, {}, command_buffer, {});
-    transfer_queue.submit(submit_info);
-    transfer_queue.waitIdle();
 }
 
 vk::raii::Buffer Buffer::createBuffer(const Device& device, Requirements requirements) {

@@ -3,11 +3,11 @@
 namespace visualization {
 namespace vulkan {
 
-Texture Texture::load(const Device& device, std::filesystem::path texture_file, vk::SamplerAddressMode address_mode, const vk::CommandBuffer& command_buffer, const vk::Queue& transfer_queue) {
+Texture Texture::load(const Device& device, std::filesystem::path texture_file, vk::SamplerAddressMode address_mode) {
     auto usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
     auto parameters = Image::Parameters(vk::MemoryPropertyFlagBits::eDeviceLocal, usage, vk::ImageTiling::eOptimal);
 
-    return Texture(device, Image::load(device, texture_file, parameters, command_buffer, transfer_queue), address_mode);
+    return Texture(device, Image::load(device, texture_file, parameters), address_mode);
 }
 
 vk::DescriptorImageInfo Texture::descriptorInfo() const {

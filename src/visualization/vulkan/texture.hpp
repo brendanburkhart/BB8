@@ -12,9 +12,7 @@ class Texture {
 public:
     static Texture load(const Device& device,
                         std::filesystem::path image_file,
-                        vk::SamplerAddressMode address_mode,
-                        const vk::CommandBuffer& command_buffer,
-                        const vk::Queue& transfer_queue);
+                        vk::SamplerAddressMode address_mode);
 
     vk::DescriptorImageInfo descriptorInfo() const;
 

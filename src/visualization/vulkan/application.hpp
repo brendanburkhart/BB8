@@ -4,13 +4,14 @@
 #include <vulkan/vulkan_raii.hpp>
 
 #include "buffer.hpp"
+#include "depth_buffer.hpp"
 #include "device.hpp"
 #include "frame_resources.hpp"
+#include "model.hpp"
 #include "shaders/vertex.hpp"
 #include "swap_chain.hpp"
 #include "texture.hpp"
 #include "utilities.hpp"
-#include "depth_buffer.hpp"
 #include "window.hpp"
 
 namespace visualization {
@@ -38,10 +39,7 @@ private:
 
     static vk::raii::DescriptorPool createDescriptorPool(const Device& device);
 
-    static Texture createTexture(const Device& device, const vk::CommandPool& pool);
-
-    Buffer buildVertexBuffer();
-    Buffer buildIndexBuffer();
+    Model createModel();
 
     void buildRenderPass();
     void buildSwapChain();
@@ -78,31 +76,12 @@ private:
     vk::raii::Pipeline pipeline;
 
     vk::raii::CommandPool command_pool;
-    vk::raii::CommandPool transient_pool;
 
     vk::raii::DescriptorPool descriptor_pool;
 
-    Texture texture_image;
     DepthBuffer depth_buffer;
 
-    const std::array<shaders::Vertex, 8> vertex_data = {
-        // sqaure one
-        shaders::Vertex({-0.5f, -0.5f, 0.0}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}),
-        shaders::Vertex({0.5f, -0.5f, 0.0}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}),
-        shaders::Vertex({0.5f, 0.5f, 0.0}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}),
-        shaders::Vertex({-0.5f, 0.5f, 0.0}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}),
-        // square two
-        shaders::Vertex({-0.5f, -0.5f, -0.5}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}),
-        shaders::Vertex({0.5f, -0.5f, -0.5}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}),
-        shaders::Vertex({0.5f, 0.5f, -0.5}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}),
-        shaders::Vertex({-0.5f, 0.5f, -0.5}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f})};
-    const std::vector<uint16_t> vertex_indices = {
-        0, 1, 2, 2, 3, 0,  // square one
-        4, 5, 6, 6, 7, 4   // square two
-    };
-
-    Buffer vertex_buffer;
-    Buffer index_buffer;
+    Model model;
 
     static constexpr size_t max_frames_in_flight = 2;
     std::array<FrameResources, max_frames_in_flight> frames;

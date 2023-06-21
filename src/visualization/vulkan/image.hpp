@@ -31,9 +31,7 @@ public:
 
     static Image load(const Device& device,
                       std::filesystem::path image_file,
-                      Parameters parameters,
-                      const vk::CommandBuffer& command_buffer,
-                      const vk::Queue& transfer_queue);
+                      Parameters parameters);
 
     Image(const Device& device, uint32_t width, uint32_t height, Parameters parameters);
 

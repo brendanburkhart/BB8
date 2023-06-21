@@ -23,8 +23,11 @@ public:
 
     const vk::PhysicalDevice physical() const;
     const vk::raii::Device& logical() const;
-    const vk::Queue& queue() const;
+    const vk::Queue& graphicsQueue() const;
     const vk::Queue& presentQueue() const;
+    const vk::Queue& transferQueue() const;
+
+    const vk::CommandPool& transientPool() const;
 
     const vk::PhysicalDeviceProperties properties() const;
     const vk::PhysicalDeviceFeatures features() const;
@@ -55,6 +58,8 @@ private:
 
     const vk::raii::Queue graphics_queue;
     const vk::raii::Queue present_queue;
+
+    const vk::raii::CommandPool transient_pool;
 };
 
 }  // namespace vulkan

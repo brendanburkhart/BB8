@@ -26,12 +26,13 @@ embedded_source = """\
 #define BB8_VISUALIZATION_SHADERS_{}\n\n\
 #include <vector>\n#include <cstdint>\n\n\
 namespace visualization {{\n\
+namespace vulkan {{\n\
 namespace shaders {{\n\n""".format(include_guard_name, include_guard_name)
 
 for name, file in shaders:
     embedded_source += embed_contents(name, file)
 
-embedded_source += "}\n}\n#endif"
+embedded_source += "}\n}\n}\n#endif"
 
 with open(output_file_path, mode='w') as file:
     file.write(embedded_source)

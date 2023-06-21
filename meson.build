@@ -9,18 +9,18 @@ project(
     ]
 )
 
-cpp = meson.get_compiler('cpp')
-add_project_arguments(cpp.get_supported_arguments(['-Wno-cast-function-type']), language: 'cpp')
+cpp_compiler = meson.get_compiler('cpp')
+add_project_arguments(cpp_compiler.get_supported_arguments(['-Wno-cast-function-type']), language: 'cpp')
 
 # Meson will find correct threading library (i.e. pthreads or W32)
 thread_dep = dependency('threads')
 
-cpp_compiler = meson.get_compiler('cpp')
 dl_dep = cpp_compiler.find_library('dl', required: false)
 
-vulkan_dep = dependency('vulkan')
-glm_dep = dependency('glm')
-glfw_dep = dependency('glfw3')
-stb_image_dep = dependency('stb_image')
+vulkan_dep = dependency('vulkan') # graphics
+glm_dep = dependency('glm') # linalg
+glfw_dep = dependency('glfw3') # window/input management
+stb_image_dep = dependency('stb_image') # image file loading
+tinyobjloader_dep = dependency('tinyobjloader') # obj/mtl loading
 
 subdir('src')

@@ -8,6 +8,7 @@ vulkan_src = files([
     'frame_resources.cpp',
     'image.cpp',
     'memory.cpp',
+    'model.cpp',
     'swap_chain.cpp',
     'texture.cpp',
     'utilities.cpp',

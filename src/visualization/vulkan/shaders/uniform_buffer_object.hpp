@@ -1,10 +1,12 @@
-#ifndef BB8_VISUALIZATION_SHADERS_UNIFORM_BUFFER_OBJECT_HPP
-#define BB8_VISUALIZATION_SHADERS_UNIFORM_BUFFER_OBJECT_HPP
+#ifndef BB8_VISUALIZATION_VULKAN_SHADERS_UNIFORM_BUFFER_OBJECT_HPP
+#define BB8_VISUALIZATION_VULKAN_SHADERS_UNIFORM_BUFFER_OBJECT_HPP
 
-#include "../glm.hpp"
 #include <vulkan/vulkan_raii.hpp>
 
+#include "../glm.hpp"
+
 namespace visualization {
+namespace vulkan {
 namespace shaders {
 
 class UniformBufferObject {
@@ -17,6 +19,7 @@ public:
 };
 
 }  // namespace shaders
+}  // namespace vulkan
 }  // namespace visualization
 
-#endif  // !BB8_VISUALIZATION_SHADERS_UNIFORM_BUFFER_OBJECT_HPP
+#endif  // !BB8_VISUALIZATION_VULKAN_SHADERS_UNIFORM_BUFFER_OBJECT_HPP

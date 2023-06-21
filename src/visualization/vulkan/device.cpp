@@ -17,7 +17,8 @@ Device::Device(const vk::raii::Instance& instance, const vk::SurfaceKHR& surface
       enabled_features(selectFeatures(*physical_device)),
       logical_device(buildLogicalDevice(physical_device, queue_families, enabled_features, layers, extensions)),
       graphics_queue(logical_device.getQueue(queue_families.graphics.value(), 0)),
-      present_queue(logical_device.getQueue(queue_families.present.value(), 0)) {}
+      present_queue(logical_device.getQueue(queue_families.present.value(), 0)),
+      transient_pool(createPool(true)) {}
 
 void Device::waitIdle() {
     logical_device.waitIdle();
@@ -37,12 +38,20 @@ const vk::raii::Device& Device::logical() const {
     return logical_device;
 }
 
-const vk::Queue& Device::queue() const {
+const vk::Queue& Device::graphicsQueue() const {
     return *graphics_queue;
 }
 
 const vk::Queue& Device::presentQueue() const {
     return *present_queue;
+}
+
+const vk::Queue& Device::transferQueue() const {
+    return *graphics_queue;
+}
+
+const vk::CommandPool& Device::transientPool() const {
+    return *transient_pool;
 }
 
 const vk::PhysicalDeviceProperties Device::properties() const {

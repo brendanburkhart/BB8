@@ -21,28 +21,30 @@ Image::Parameters Image::Parameters::texture() {
 
 Image Image::load(const Device& device,
                   std::filesystem::path image_file,
-                  Parameters parameters,
-                  const vk::CommandBuffer& command_buffer,
-                  const vk::Queue& transfer_queue) {
+                  Parameters parameters) {
     resources::Image image_source = resources::Image::load(image_file);
+
+    auto allocate_info = vk::CommandBufferAllocateInfo(device.transientPool(), vk::CommandBufferLevel::ePrimary, 1);
+    auto command_buffers = vk::raii::CommandBuffers(device.logical(), allocate_info);
+    auto command_buffer = std::move(command_buffers.front());
+
+    auto begin_info = vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    command_buffer.begin(begin_info);
 
     Buffer staging = Buffer(device, Buffer::Requirements::staging(image_source.size()));
     staging.fill((void*)image_source.data(), image_source.size());
 
     auto image = Image(device, image_source.width(), image_source.height(), parameters);
 
-    auto begin_info = vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    command_buffer.begin(begin_info);
-
-    image.transitionLayout(command_buffer, parameters.format, vk::ImageLayout::eTransferDstOptimal);
-    image.fill(command_buffer, staging);
-    image.transitionLayout(command_buffer, parameters.format, vk::ImageLayout::eShaderReadOnlyOptimal);
+    image.transitionLayout(*command_buffer, parameters.format, vk::ImageLayout::eTransferDstOptimal);
+    image.fill(*command_buffer, staging);
+    image.transitionLayout(*command_buffer, parameters.format, vk::ImageLayout::eShaderReadOnlyOptimal);
 
     command_buffer.end();
 
-    auto submit_info = vk::SubmitInfo({}, {}, command_buffer, {});
-    transfer_queue.submit(submit_info);
-    transfer_queue.waitIdle();
+    auto submit_info = vk::SubmitInfo({}, {}, *command_buffer, {});
+    device.transferQueue().submit(submit_info);
+    device.transferQueue().waitIdle();
 
     return image;
 }

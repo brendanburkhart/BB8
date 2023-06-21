@@ -10,6 +10,7 @@
 #include <stdexcept>
 
 #include "glm.hpp"
+#include "model.hpp"
 #include "shaders.hpp"
 #include "shaders/uniform_buffer_object.hpp"
 #include "shaders/vertex.hpp"
@@ -30,14 +31,11 @@ Application::Application(std::string name, Window* window)
       render_pass(nullptr),
       pipeline(nullptr),
       command_pool(device.createPool(false)),
-      transient_pool(device.createPool(true)),
       descriptor_pool(createDescriptorPool(device)),
-      texture_image(createTexture(device, *transient_pool)),
       depth_buffer(device, 1, 1),
-      vertex_buffer(buildVertexBuffer()),
-      index_buffer(buildIndexBuffer()),
-      frames({FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout, texture_image),
-              FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout, texture_image)}),
+      model(createModel()),
+      frames({FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout, model.getTexture()),
+              FrameResources(device, *command_pool, *descriptor_pool, *descriptor_set_layout, model.getTexture())}),
       swap_chain(device, *surface, window->size()) {
     buildRenderPass();
     buildSwapChain();
@@ -147,42 +145,8 @@ vk::raii::DescriptorPool Application::createDescriptorPool(const Device& device)
     return vk::raii::DescriptorPool(device.logical(), create_info);
 }
 
-Texture Application::createTexture(const Device& device, const vk::CommandPool& pool) {
-    auto allocate_info = vk::CommandBufferAllocateInfo(pool, vk::CommandBufferLevel::ePrimary, 1);
-    auto command_buffers = vk::raii::CommandBuffers(device.logical(), allocate_info);
-
-    auto file = std::filesystem::path("resources/textures/statue.jpg");
-    return Texture::load(device, file, vk::SamplerAddressMode::eRepeat, *command_buffers.front(), device.queue());
-}
-
-Buffer Application::buildVertexBuffer() {
-    size_t size = vertex_data.size() * sizeof(vertex_data[0]);
-    Buffer staging = Buffer(device, Buffer::Requirements::staging(size));
-    Buffer vertex_buffer = Buffer(device, Buffer::Requirements::vertex(size));
-
-    staging.fill((void*)vertex_data.data(), size);
-
-    auto allocate_info = vk::CommandBufferAllocateInfo(*transient_pool, vk::CommandBufferLevel::ePrimary, 1);
-    auto command_buffers = vk::raii::CommandBuffers(device.logical(), allocate_info);
-
-    Buffer::copy(staging, vertex_buffer, *command_buffers.front(), device.queue());
-
-    return vertex_buffer;
-}
-
-Buffer Application::buildIndexBuffer() {
-    size_t size = vertex_indices.size() * sizeof(vertex_indices[0]);
-    Buffer staging = Buffer(device, Buffer::Requirements::staging(size));
-    Buffer index_buffer = Buffer(device, Buffer::Requirements::index(size));
-
-    staging.fill((void*)vertex_indices.data(), size);
-
-    auto allocate_info = vk::CommandBufferAllocateInfo(*transient_pool, vk::CommandBufferLevel::ePrimary, 1);
-    auto command_buffers = vk::raii::CommandBuffers(device.logical(), allocate_info);
-
-    Buffer::copy(staging, index_buffer, *command_buffers.front(), device.queue());
-
-    return index_buffer;
+Model Application::createModel() {
+    return Model::load(device, "resources/models/viking_room.obj", "resources/textures/viking_room.png");
 }
 
 void Application::buildGraphicsPipeline() {
@@ -266,7 +230,7 @@ void Application::buildGraphicsPipeline() {
         &viewport_create_info,        // viewport state
         &rasterizer,                  // rasterization state
         &multisample,                 // multisample state
-        &depth_stencil,                      // depth stencil state
+        &depth_stencil,               // depth stencil state
         &color_blend,                 // color blend state
         &dynamic_states_create_info,  // dynamic state
         *pipeline_layout,             // layout
@@ -303,8 +267,8 @@ void Application::recordCommandBuffer(vk::CommandBuffer command_buffer, const vk
     command_buffer.beginRenderPass(render_pass_info, vk::SubpassContents::eInline);
 
     command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline);
-    command_buffer.bindVertexBuffers(0, vertex_buffer.get(), vk::DeviceSize(0));
-    command_buffer.bindIndexBuffer(index_buffer.get(), vk::DeviceSize(0), vk::IndexType::eUint16);
+    command_buffer.bindVertexBuffers(0, model.getVertices().get(), vk::DeviceSize(0));
+    command_buffer.bindIndexBuffer(model.getIndices().get(), vk::DeviceSize(0), vk::IndexType::eUint32);
 
     command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipeline_layout, 0, frames[frame_index].getDescriptors(), {});
 
@@ -312,7 +276,7 @@ void Application::recordCommandBuffer(vk::CommandBuffer command_buffer, const vk
     command_buffer.setViewport(0, viewport);
     command_buffer.setScissor(0, render_area);
 
-    command_buffer.drawIndexed(static_cast<uint32_t>(vertex_indices.size()), 1, 0, 0, 0);
+    command_buffer.drawIndexed(static_cast<uint32_t>(model.indexCount()), 1, 0, 0, 0);
 
     command_buffer.endRenderPass();
     command_buffer.end();
@@ -337,7 +301,7 @@ void Application::drawFrame() {
 
     recordCommandBuffer(frame.getCommandBuffer(), swap_chain.getFramebuffer(image_index));
 
-    frame.submitTo(device.queue());
+    frame.submitTo(device.graphicsQueue());
 
     auto present_result = frame.presentTo(device.presentQueue(), swap_chain, image_index);
     if (present_result == vk::Result::eErrorOutOfDateKHR) {
