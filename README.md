@@ -8,7 +8,7 @@ meson setup build
 ```
 To configure a release build, use
 ```
-meson setup release -Dbuildtype=release -Db_lto=true -Doptimization=2
+meson setup release -Db_lto=true -Dbuildtype=release -Db_ndebug=true
 ```
 
 Building:

@@ -15,7 +15,7 @@ vk::DescriptorImageInfo Texture::descriptorInfo() const {
 }
 
 Texture::Texture(const Device& device, Image image, vk::SamplerAddressMode address_mode)
-    : image(std::move(image)), sampler(createSampler(device, address_mode)){};
+    : image(std::move(image)), sampler(createSampler(device, address_mode)) {}
 
 vk::raii::Sampler Texture::createSampler(const Device& device, vk::SamplerAddressMode address_mode) {
     bool enable_anisotropy = device.features().samplerAnisotropy;

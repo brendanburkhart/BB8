@@ -25,7 +25,7 @@ Application::Application(std::string name, Window* window)
     : window(window),
       instance(buildInstance(context, window, name, VK_MAKE_VERSION(0, 0, 1))),
       surface(window->createSurface(instance)),
-      device(instance, *surface, validation_layers, device_extensions),
+      device(buildDevice(instance, *surface)),
       descriptor_set_layout(buildDescriptorLayout(device)),
       pipeline_layout(nullptr),
       render_pass(nullptr),

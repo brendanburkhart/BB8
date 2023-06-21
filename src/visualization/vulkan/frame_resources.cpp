@@ -45,6 +45,9 @@ const vk::CommandBuffer& FrameResources::getCommandBuffer() const {
 void FrameResources::waitUntilReady(const Device& device) const {
     vk::Result wait_result = device.logical().waitForFences(*in_flight_fence, true, timeout);
     assert(wait_result == vk::Result::eSuccess);
+
+    // prevent unused variable warning when NDEBUG is defined (and therefore assert is removed)
+    (void)wait_result;
 }
 
 void FrameResources::reset(const Device& device) {
