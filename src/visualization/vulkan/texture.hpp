@@ -19,7 +19,7 @@ public:
 private:
     Texture(const Device& device, Image image, vk::SamplerAddressMode address_mode);
 
-    static vk::raii::Sampler createSampler(const Device& device, vk::SamplerAddressMode address_mode);
+    static vk::raii::Sampler createSampler(const Device& device, const Image& image, vk::SamplerAddressMode address_mode);
 
     Image image;
     vk::raii::Sampler sampler;

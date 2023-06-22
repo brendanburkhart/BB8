@@ -175,7 +175,7 @@ void Application::buildGraphicsPipeline() {
                                                                false,                             // depthClampEnable
                                                                false,                             // rasterizerDiscardEnable
                                                                vk::PolygonMode::eFill,            // polygonMode
-                                                               vk::CullModeFlagBits::eBack,       // cullMode
+                                                               vk::CullModeFlagBits::eNone,       // cullMode
                                                                vk::FrontFace::eCounterClockwise,  // frontFace
                                                                false,                             // depthBiasEnable
                                                                0.0f,                              // depthBiasConstantFactor

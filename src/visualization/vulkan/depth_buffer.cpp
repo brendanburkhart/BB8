@@ -14,10 +14,6 @@ vk::ImageView DepthBuffer::getView() const {
     return image.getView();
 }
 
-bool DepthBuffer::formatHasStencil(vk::Format format) {
-    return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint;
-}
-
 vk::Format DepthBuffer::findFormat(const Device& device) {
     std::vector<vk::Format> formats = {
         vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint};
@@ -37,8 +33,9 @@ Image::Parameters DepthBuffer::parametersFor(const Device& device) {
     auto memory = vk::MemoryPropertyFlagBits::eDeviceLocal;
     auto usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
     auto aspects = vk::ImageAspectFlagBits::eDepth;
+    auto mipmap = false;
 
-    return Image::Parameters(memory, usage, tiling, format, aspects);
+    return Image::Parameters(memory, usage, tiling, format, aspects, mipmap);
 }
 
 }  // namespace vulkan
